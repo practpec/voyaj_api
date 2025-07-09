@@ -1,0 +1,342 @@
+# ============================================================================
+# VOYAJ API - .gitignore
+# ============================================================================
+
+# ============================================================================
+# DEPENDENCIAS
+# ============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ============================================================================
+# VARIABLES DE ENTORNO Y CONFIGURACIÓN SENSIBLE
+# ============================================================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.staging
+
+# Archivos de configuración con secretos
+config/secrets.json
+config/production.json
+config/staging.json
+
+# ============================================================================
+# TYPESCRIPT Y BUILD
+# ============================================================================
+dist/
+build/
+*.tsbuildinfo
+.tscache/
+
+# ============================================================================
+# LOGS
+# ============================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Logs específicos de la aplicación
+error.log
+warn.log
+info.log
+debug.log
+*.log.*
+
+# ============================================================================
+# BASES DE DATOS
+# ============================================================================
+# MongoDB dumps
+*.dump
+*.bson
+mongo-data/
+mongodb-data/
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+*.db
+
+# PostgreSQL dumps
+*.sql
+*.psql
+
+# ============================================================================
+# UPLOADS Y ARCHIVOS TEMPORALES
+# ============================================================================
+uploads/
+tmp/
+temp/
+.tmp/
+.temp/
+
+# Archivos de imágenes subidas
+public/uploads/
+static/uploads/
+
+# ============================================================================
+# DOCKER
+# ============================================================================
+docker-compose.override.yml
+.dockerignore
+Dockerfile.dev
+Dockerfile.prod
+
+# Volúmenes de Docker
+mongo-volume/
+postgres-volume/
+redis-volume/
+
+# ============================================================================
+# SISTEMA OPERATIVO
+# ============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ============================================================================
+# EDITORES E IDEs
+# ============================================================================
+
+# Visual Studio Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.vsix
+
+# JetBrains IDEs (WebStorm, IntelliJ, etc.)
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Sublime Text
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ============================================================================
+# HERRAMIENTAS DE DESARROLLO
+# ============================================================================
+
+# ESLint
+.eslintcache
+
+# Prettier
+.prettierignore
+
+# Jest
+coverage/
+.nyc_output/
+junit.xml
+
+# Stryker
+.stryker-tmp/
+reports/
+
+# Testing
+test-results/
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.cache/
+
+# ============================================================================
+# CACHE Y TEMPORALES
+# ============================================================================
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vuepress/dist/
+.serverless/
+.fusebox/
+
+# npm cache
+.npm
+
+# Yarn cache
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# pnpm cache
+.pnpm-store/
+
+# ============================================================================
+# CLOUDFLARE
+# ============================================================================
+.wrangler/
+
+# ============================================================================
+# DEPLOYMENT Y CI/CD
+# ============================================================================
+.vercel/
+.netlify/
+.firebase/
+.amplify/
+
+# GitHub Actions artifacts
+.github/workflows/artifacts/
+
+# ============================================================================
+# MONITOREO Y PERFORMANCE
+# ============================================================================
+newrelic_agent.log
+.nyc_output/
+
+# Lighthouse reports
+lighthouse-results/
+
+# ============================================================================
+# CERTIFICADOS Y LLAVES
+# ============================================================================
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# ============================================================================
+# BACKUP Y ARCHIVOS TEMPORALES
+# ============================================================================
+*.backup
+*.bak
+*.old
+*.orig
+*.rej
+*.swp
+*.tmp
+*~
+
+# ============================================================================
+# ESPECÍFICOS DEL PROYECTO VOYAJ
+# ============================================================================
+
+# Archivos de migración temporal
+migrations/temp/
+
+# Archivos de seed de desarrollo
+seeds/dev-data/
+seeds/test-data/
+
+# Reportes generados
+reports/
+analytics/
+
+# Documentación generada
+docs/generated/
+api-docs/
+
+# Archivos de configuración local de desarrollo
+config/local.json
+config/dev.json
+
+# Scripts de desarrollo personal
+scripts/personal/
+scripts/dev-*.sh
+scripts/test-*.sh
+
+# ============================================================================
+# EXCLUIR ARCHIVOS ESPECÍFICOS PERO MANTENER CARPETAS
+# ============================================================================
+
+# Mantener carpetas vacías con .gitkeep
+!**/.gitkeep
+
+# ============================================================================
+# ARCHIVOS QUE SÍ QUEREMOS INCLUIR
+# ============================================================================
+
+# Asegurar que estos archivos importantes se incluyan
+!.env.example
+!.env.template
+!docker-compose.yml
+!Dockerfile
+!README.md
+!package.json
+!tsconfig.json
+!.eslintrc.js
+!.prettierrc
+!jest.config.js
