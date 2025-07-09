@@ -1,3 +1,4 @@
+// src/modules/users/application/useCases/GetUserById.ts
 import { IUserRepository } from '../../domain/interfaces/IUserRepository';
 import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
 import { PublicUserDTO, UserDTOMapper } from '../dtos/CreateUserDTO';

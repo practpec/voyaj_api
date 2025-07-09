@@ -26,6 +26,9 @@ export interface PaginationMeta {
 }
 
 export class ResponseUtils {
+  static handleError(res: Response<any, Record<string, any>>, error: unknown) {
+    throw new Error('Method not implemented.');
+  }
   // Respuesta de éxito genérica
   public static success<T>(
     res: Response,

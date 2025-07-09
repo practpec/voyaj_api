@@ -1,3 +1,4 @@
+// src/modules/users/application/useCases/ChangePassword.ts
 import { IUserRepository } from '../../domain/interfaces/IUserRepository';
 import { UserService } from '../../domain/UserService';
 import { EmailService } from '../../../../shared/services/EmailService';
@@ -5,7 +6,7 @@ import { EventBus } from '../../../../shared/events/EventBus';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import { ValidationUtils } from '../../../../shared/utils/ValidationUtils';
 import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
-import { ChangePasswordDTO } from '../dtos/ChangePasswordDTO';
+import { ChangePasswordDTO } from '../dtos/CreateUserDTO';
 
 export class ChangePasswordUseCase {
   private userService: UserService;
@@ -34,7 +35,6 @@ export class ChangePasswordUseCase {
       throw ErrorHandler.createValidationError(validation.error!, validation.details);
     }
 
-    // Cambiar contraseña usando el servicio de dominio
     await this.userService.changePassword(
       userId,
       dto.currentPassword,

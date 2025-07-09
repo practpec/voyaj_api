@@ -1,9 +1,9 @@
+// src/modules/users/application/useCases/SearchUsers.ts
 import { IUserRepository } from '../../domain/interfaces/IUserRepository';
-import { PaginationUtils, PaginatedResult } from '../../../../shared/utils/PaginationUtils';
 import { ValidationUtils } from '../../../../shared/utils/ValidationUtils';
 import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
-import { UserSearchResultDTO, UserDTOMapper } from '../dtos/CreateUserDTO';
-import { SearchUsersDTO } from '../dtos/SearchUsersDTO';
+import { PaginationUtils, PaginatedResult } from '../../../../shared/utils/PaginationUtils';
+import { UserSearchResultDTO, SearchUsersDTO, UserDTOMapper } from '../dtos/CreateUserDTO';
 
 export class SearchUsersUseCase {
   constructor(private userRepository: IUserRepository) {}
@@ -19,10 +19,7 @@ export class SearchUsersUseCase {
       throw ErrorHandler.createValidationError(validation.error!, validation.details);
     }
 
-    // Crear opciones de paginación
     const paginationOptions = PaginationUtils.createPaginationOptions(dto);
-    
-    // Buscar usuarios
     const result = await this.userRepository.searchByEmailOrName(
       dto.query,
       paginationOptions

@@ -1,3 +1,4 @@
+// src/modules/users/application/useCases/RestoreUser.ts
 import { IUserRepository } from '../../domain/interfaces/IUserRepository';
 import { UserService } from '../../domain/UserService';
 import { EmailService } from '../../../../shared/services/EmailService';
@@ -18,9 +19,7 @@ export class RestoreUserUseCase {
   }
 
   public async execute(userId: string, adminUserId: string): Promise<AuthenticatedUserDTO> {
-    // Restaurar usuario usando el servicio de dominio
     const user = await this.userService.restoreUser(userId, adminUserId);
-    
     return UserDTOMapper.toAuthenticatedUser(user.toPublicData());
   }
 }
