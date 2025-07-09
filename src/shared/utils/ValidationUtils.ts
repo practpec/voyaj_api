@@ -169,13 +169,22 @@ export class ValidationUtils {
     });
 
     if (error) {
+      // Verificación más estricta para TypeScript
+      let firstError = 'Error de validación';
+      let errorDetails: any[] = [];
+
+      if (error.details && Array.isArray(error.details) && error.details.length > 0) {
+        firstError = error.details[0]?.message || 'Error de validación';
+        errorDetails = error.details.map(detail => ({
+          field: detail.path?.join('.') || 'unknown',
+          message: detail.message || 'Error desconocido'
+        }));
+      }
+
       return {
         isValid: false,
-        error: error.details[0].message,
-        details: error.details.map(detail => ({
-          field: detail.path.join('.'),
-          message: detail.message
-        }))
+        error: firstError,
+        details: errorDetails
       };
     }
 

@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { JWT_CONFIG } from '../constants';
 import { ErrorHandler } from '../utils/ErrorUtils';
 
@@ -46,30 +46,27 @@ export class TokenService {
 
   // Generar access token
   public generateAccessToken(payload: Omit<TokenPayload, 'iat' | 'exp'>): string {
-    return jwt.sign(
-      payload,
-      this.accessTokenSecret,
-      {
-        expiresIn: JWT_CONFIG.ACCESS_TOKEN_EXPIRY,
-        algorithm: JWT_CONFIG.ALGORITHM as jwt.Algorithm,
-        issuer: 'voyaj-api',
-        audience: 'voyaj-app'
-      }
-    );
+    const options: SignOptions = {
+      expiresIn: JWT_CONFIG.ACCESS_TOKEN_EXPIRY,
+      algorithm: JWT_CONFIG.ALGORITHM as jwt.Algorithm,
+      issuer: 'voyaj-api',
+      audience: 'voyaj-app'
+    };
+    
+    return jwt.sign(payload, this.accessTokenSecret, options);
   }
 
   // Generar refresh token
   public generateRefreshToken(payload: Omit<TokenPayload, 'iat' | 'exp'>): string {
-    return jwt.sign(
-      { userId: payload.userId }, // Solo incluir userId en refresh token por seguridad
-      this.refreshTokenSecret,
-      {
-        expiresIn: JWT_CONFIG.REFRESH_TOKEN_EXPIRY,
-        algorithm: JWT_CONFIG.ALGORITHM as jwt.Algorithm,
-        issuer: 'voyaj-api',
-        audience: 'voyaj-app'
-      }
-    );
+    const refreshPayload = { userId: payload.userId }; // Solo incluir userId por seguridad
+    const options: SignOptions = {
+      expiresIn: JWT_CONFIG.REFRESH_TOKEN_EXPIRY,
+      algorithm: JWT_CONFIG.ALGORITHM as jwt.Algorithm,
+      issuer: 'voyaj-api',
+      audience: 'voyaj-app'
+    };
+    
+    return jwt.sign(refreshPayload, this.refreshTokenSecret, options);
   }
 
   // Verificar access token
@@ -169,28 +166,26 @@ export class TokenService {
 
   // Generar token temporal para verificación de email
   public generateEmailVerificationToken(email: string, code: string): string {
-    return jwt.sign(
-      { email, code, type: 'email_verification' },
-      this.accessTokenSecret,
-      {
-        expiresIn: '24h',
-        algorithm: JWT_CONFIG.ALGORITHM as jwt.Algorithm,
-        issuer: 'voyaj-api'
-      }
-    );
+    const payload = { email, code, type: 'email_verification' };
+    const options: SignOptions = {
+      expiresIn: '24h',
+      algorithm: JWT_CONFIG.ALGORITHM as jwt.Algorithm,
+      issuer: 'voyaj-api'
+    };
+    
+    return jwt.sign(payload, this.accessTokenSecret, options);
   }
 
   // Generar token temporal para reset de contraseña
   public generatePasswordResetToken(email: string, code: string): string {
-    return jwt.sign(
-      { email, code, type: 'password_reset' },
-      this.accessTokenSecret,
-      {
-        expiresIn: '10m',
-        algorithm: JWT_CONFIG.ALGORITHM as jwt.Algorithm,
-        issuer: 'voyaj-api'
-      }
-    );
+    const payload = { email, code, type: 'password_reset' };
+    const options: SignOptions = {
+      expiresIn: '10m',
+      algorithm: JWT_CONFIG.ALGORITHM as jwt.Algorithm,
+      issuer: 'voyaj-api'
+    };
+    
+    return jwt.sign(payload, this.accessTokenSecret, options);
   }
 
   // Verificar token de verificación de email
@@ -256,16 +251,14 @@ export class TokenService {
   }
 
   // Generar JWT para firma de URLs (útil para uploads)
-  public generateSignedUrlToken(payload: any, expiresIn: string = '1h'): string {
-    return jwt.sign(
-      payload,
-      this.accessTokenSecret,
-      {
-        expiresIn,
-        algorithm: JWT_CONFIG.ALGORITHM as jwt.Algorithm,
-        issuer: 'voyaj-api'
-      }
-    );
+  public generateSignedUrlToken(payload: any, expiresIn: string | number = '1h'): string {
+    const options: SignOptions = {
+      expiresIn: expiresIn as any,
+      algorithm: JWT_CONFIG.ALGORITHM as jwt.Algorithm,
+      issuer: 'voyaj-api'
+    };
+    
+    return jwt.sign(payload, this.accessTokenSecret, options);
   }
 
   // Verificar token de URL firmada

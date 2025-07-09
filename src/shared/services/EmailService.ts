@@ -20,7 +20,7 @@ export interface PasswordResetData {
 
 export class EmailService {
   private static instance: EmailService;
-  private transporter: nodemailer.Transporter;
+  private transporter!: nodemailer.Transporter; // Usar definite assignment assertion
   private logger: LoggerService;
 
   private constructor() {
@@ -46,7 +46,8 @@ export class EmailService {
       }
     };
 
-    this.transporter = nodemailer.createTransporter(config);
+    // Corregir: usar createTransport en lugar de createTransporter
+    this.transporter = nodemailer.createTransport(config);
   }
 
   // Método genérico para enviar emails
