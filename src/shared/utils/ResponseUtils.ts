@@ -35,11 +35,17 @@ export class ResponseUtils {
   ): Response {
     const response: ApiResponse<T> = {
       success: true,
-      data,
-      message,
       timestamp: new Date(),
       requestId: res.locals.requestId
     };
+
+    if (data !== undefined) {
+      response.data = data;
+    }
+
+    if (message !== undefined) {
+      response.message = message;
+    }
 
     return res.status(statusCode).json(response);
   }
@@ -54,11 +60,14 @@ export class ResponseUtils {
     const response: ApiResponse<T[]> = {
       success: true,
       data,
-      message,
+      pagination,
       timestamp: new Date(),
-      requestId: res.locals.requestId,
-      pagination
+      requestId: res.locals.requestId
     };
+
+    if (message !== undefined) {
+      response.message = message;
+    }
 
     return res.status(200).json(response);
   }
@@ -86,7 +95,7 @@ export class ResponseUtils {
     res: Response,
     message: string = 'Recurso eliminado exitosamente'
   ): Response {
-    return this.success(res, null, message, 200);
+    return this.success(res, undefined, message, 200);
   }
 
   // Respuesta sin contenido
@@ -189,7 +198,7 @@ export class ResponseUtils {
 
   // Respuesta de logout exitoso
   public static logoutSuccess(res: Response): Response {
-    return this.success(res, null, 'Cierre de sesión exitoso');
+    return this.success(res, undefined, 'Cierre de sesión exitoso');
   }
 
   // Respuesta de registro exitoso
@@ -214,17 +223,17 @@ export class ResponseUtils {
 
   // Respuesta de verificación de email
   public static emailVerified(res: Response): Response {
-    return this.success(res, null, 'Email verificado exitosamente');
+    return this.success(res, undefined, 'Email verificado exitosamente');
   }
 
   // Respuesta de código de verificación enviado
   public static verificationCodeSent(res: Response): Response {
-    return this.success(res, null, 'Código de verificación enviado');
+    return this.success(res, undefined, 'Código de verificación enviado');
   }
 
   // Respuesta de contraseña cambiada
   public static passwordChanged(res: Response): Response {
-    return this.success(res, null, 'Contraseña cambiada exitosamente');
+    return this.success(res, undefined, 'Contraseña cambiada exitosamente');
   }
 
   // Respuesta de perfil actualizado

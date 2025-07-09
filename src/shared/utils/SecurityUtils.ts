@@ -44,7 +44,7 @@ export class SecurityUtils {
   } {
     const key = crypto.scryptSync(secretKey, 'salt', this.KEY_LENGTH);
     const iv = crypto.randomBytes(this.IV_LENGTH);
-    const cipher = crypto.createCipherGCM(this.ALGORITHM, key, iv);
+    const cipher = crypto.createCipheriv(this.ALGORITHM, key, iv);
     
     let encrypted = cipher.update(data, 'utf8', 'hex');
     encrypted += cipher.final('hex');
@@ -65,7 +65,7 @@ export class SecurityUtils {
     secretKey: string
   ): string {
     const key = crypto.scryptSync(secretKey, 'salt', this.KEY_LENGTH);
-    const decipher = crypto.createDecipherGCM(this.ALGORITHM, key, Buffer.from(iv, 'hex'));
+    const decipher = crypto.createDecipheriv(this.ALGORITHM, key, Buffer.from(iv, 'hex'));
     decipher.setAuthTag(Buffer.from(tag, 'hex'));
     
     let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
@@ -178,8 +178,11 @@ export class SecurityUtils {
 
   // Ofuscación de email para logs
   public static obfuscateEmail(email: string): string {
-    const [localPart, domain] = email.split('@');
-    if (!domain) return email;
+    const emailParts = email.split('@');
+    if (emailParts.length !== 2) return email;
+    
+    const [localPart, domain] = emailParts;
+    if (!localPart || !domain) return email;
     
     const obfuscatedLocal = localPart.length > 2 
       ? `${localPart.substring(0, 2)}${'*'.repeat(localPart.length - 2)}`
@@ -218,5 +221,46 @@ export class SecurityUtils {
   public static validateOrigin(origin: string, allowedOrigins: string[]): boolean {
     if (!origin) return false;
     return allowedOrigins.includes(origin) || allowedOrigins.includes('*');
+  }
+
+  // Generación de hash SHA-256
+  public static generateSHA256(data: string): string {
+    return crypto.createHash('sha256').update(data).digest('hex');
+  }
+
+  // Generación de hash MD5 (solo para casos no críticos)
+  public static generateMD5(data: string): string {
+    return crypto.createHash('md5').update(data).digest('hex');
+  }
+
+  // Validación de formato de email básico
+  public static isValidEmailFormat(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
+  // Generación de salt para bcrypt
+  public static generateSalt(rounds: number = this.SALT_ROUNDS): string {
+    return bcrypt.genSaltSync(rounds);
+  }
+
+  // Comparación segura de strings (timing-safe)
+  public static secureCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    
+    return crypto.timingSafeEqual(
+      Buffer.from(a, 'utf8'),
+      Buffer.from(b, 'utf8')
+    );
+  }
+
+  // Generación de token CSRF
+  public static generateCSRFToken(): string {
+    return crypto.randomBytes(32).toString('base64');
+  }
+
+  // Validación de token CSRF
+  public static validateCSRFToken(token: string, expected: string): boolean {
+    return this.secureCompare(token, expected);
   }
 }

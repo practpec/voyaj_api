@@ -85,7 +85,7 @@ export class ErrorHandler {
     details?: any;
   } {
     let statusCode = 500;
-    let errorCode = ERROR_CODES.INTERNAL_SERVER_ERROR;
+    let errorCode: string = ERROR_CODES.INTERNAL_SERVER_ERROR;
     let message = 'Error interno del servidor';
     let details: any = undefined;
 

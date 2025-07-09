@@ -153,6 +153,97 @@ export class UserController {
     );
   }
 
+  // POST /api/users/register
+  public register = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.createUserUseCase.execute(req.body);
+      ResponseUtils.registerSuccess(res, result.user, result.tokens);
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // POST /api/users/login
+  public login = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.loginUserUseCase.execute(req.body, {
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      ResponseUtils.loginSuccess(res, result.user, result.tokens);
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // POST /api/users/refresh-token
+  public refreshToken = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.refreshTokenUseCase.execute(req.body);
+      ResponseUtils.tokenRefreshed(res, result.tokens);
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // POST /api/users/logout
+  public logout = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { refreshToken } = req.body;
+      const userId = req.user!.userId;
+      
+      await this.logoutUserUseCase.execute(userId, refreshToken);
+      ResponseUtils.logoutSuccess(res);
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // POST /api/users/verify-email
+  public verifyEmail = async (req: Request, res: Response): Promise<void> => {
+    try {
+      await this.verifyEmailUseCase.execute(req.body);
+      ResponseUtils.emailVerified(res);
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
   // POST /api/users/resend-verification
   public resendVerification = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -433,95 +524,4 @@ export class UserController {
       );
     }
   };
-}/users/register
-  public register = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const result = await this.createUserUseCase.execute(req.body);
-      ResponseUtils.registerSuccess(res, result.user, result.tokens);
-    } catch (error) {
-      const errorResponse = ErrorHandler.handleError(error as Error);
-      ResponseUtils.error(
-        res,
-        errorResponse.statusCode,
-        errorResponse.errorCode,
-        errorResponse.message,
-        errorResponse.details
-      );
-    }
-  };
-
-  // POST /api/users/login
-  public login = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const result = await this.loginUserUseCase.execute(req.body, {
-        ip: req.ip,
-        userAgent: req.get('User-Agent')
-      });
-      ResponseUtils.loginSuccess(res, result.user, result.tokens);
-    } catch (error) {
-      const errorResponse = ErrorHandler.handleError(error as Error);
-      ResponseUtils.error(
-        res,
-        errorResponse.statusCode,
-        errorResponse.errorCode,
-        errorResponse.message,
-        errorResponse.details
-      );
-    }
-  };
-
-  // POST /api/users/refresh-token
-  public refreshToken = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const result = await this.refreshTokenUseCase.execute(req.body);
-      ResponseUtils.tokenRefreshed(res, result.tokens);
-    } catch (error) {
-      const errorResponse = ErrorHandler.handleError(error as Error);
-      ResponseUtils.error(
-        res,
-        errorResponse.statusCode,
-        errorResponse.errorCode,
-        errorResponse.message,
-        errorResponse.details
-      );
-    }
-  };
-
-  // POST /api/users/logout
-  public logout = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { refreshToken } = req.body;
-      const userId = req.user!.userId;
-      
-      await this.logoutUserUseCase.execute(userId, refreshToken);
-      ResponseUtils.logoutSuccess(res);
-    } catch (error) {
-      const errorResponse = ErrorHandler.handleError(error as Error);
-      ResponseUtils.error(
-        res,
-        errorResponse.statusCode,
-        errorResponse.errorCode,
-        errorResponse.message,
-        errorResponse.details
-      );
-    }
-  };
-
-  // POST /api/users/verify-email
-  public verifyEmail = async (req: Request, res: Response): Promise<void> => {
-    try {
-      await this.verifyEmailUseCase.execute(req.body);
-      ResponseUtils.emailVerified(res);
-    } catch (error) {
-      const errorResponse = ErrorHandler.handleError(error as Error);
-      ResponseUtils.error(
-        res,
-        errorResponse.statusCode,
-        errorResponse.errorCode,
-        errorResponse.message,
-        errorResponse.details
-      );
-    }
-  };
-
-  // POST /api
+}

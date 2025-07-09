@@ -11,11 +11,18 @@
     "lint": "eslint src/**/*.ts",
     "db:seed": "ts-node src/scripts/seed.ts"
   },
-  "keywords": ["voyaj", "travel", "api", "nodejs", "typescript"],
+  "keywords": [
+    "voyaj",
+    "travel",
+    "api",
+    "nodejs",
+    "typescript"
+  ],
   "author": "Tu nombre",
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^3.0.2",
+    "cloudinary": "^2.7.0",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
@@ -26,7 +33,9 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.17.0",
     "morgan": "^1.10.0",
+    "multer": "^2.0.1",
     "nodemailer": "^7.0.5",
+    "sharp": "^0.34.2",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
