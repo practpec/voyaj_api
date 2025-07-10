@@ -1,4 +1,4 @@
-// src/server.ts
+// src/server.ts - VERSIÓN CORREGIDA FINAL
 import dotenv from 'dotenv';
 
 // Cargar variables de entorno antes que cualquier otra cosa
@@ -146,14 +146,16 @@ class Server {
       }, 'Información de la API');
     });
 
-    // Importar y configurar rutas (ahora sincróno, ya que usamos lazy loading en el controlador)
-    const { userRoutes } = require('./modules/users/infrastructure/routes/userRoutes');
-    this.app.use('/api/users', userRoutes);
-
-    // Ruta 404
-    this.app.use('*', (req, res) => {
-      ResponseUtils.notFound(res, `Ruta no encontrada: ${req.method} ${req.originalUrl}`);
-    });
+    // Importar y configurar rutas con manejo de errores
+    try {
+      this.logger.info('🔄 Cargando rutas de usuarios...');
+      const { userRoutes } = require('./modules/users/infrastructure/routes/userRoutes');
+      this.app.use('/api/users', userRoutes);
+      this.logger.info('✅ Rutas de usuarios cargadas exitosamente');
+    } catch (error) {
+      this.logger.error('❌ Error cargando rutas de usuarios:', error);
+      throw new Error(`Error cargando rutas: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   private initializeErrorHandling(): void {
@@ -219,7 +221,7 @@ class Server {
       
       // 3. Inicializar rutas DESPUÉS de la conexión
       this.logger.info('🚧 Inicializando rutas...');
-      this.initializeRoutes(); // Ahora es sincróno
+      this.initializeRoutes();
       this.logger.info('✅ Rutas inicializadas exitosamente');
       
       // 4. Configurar manejo de errores
