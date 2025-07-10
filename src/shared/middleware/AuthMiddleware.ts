@@ -1,3 +1,4 @@
+// src/shared/middleware/AuthMiddleware.ts
 import { Request, Response, NextFunction } from 'express';
 import { TokenService } from '../services/TokenService';
 import { CacheService } from '../services/CacheService';
@@ -33,7 +34,7 @@ export class AuthMiddleware {
       const token = this.extractToken(req);
       
       if (!token) {
-        this.logger.logSecurity('Missing auth token', req.ip, req.get('User-Agent'));
+        this.logger.logSecurity('Missing auth token', req.ip || 'unknown', req.get('User-Agent'));
         ResponseUtils.unauthorized(res, 'Token de autenticación requerido');
         return;
       }
@@ -89,7 +90,7 @@ export class AuthMiddleware {
       if (!allowedRoles.includes(userRole)) {
         this.logger.logSecurity(
           `Insufficient role: ${userRole}`,
-          req.ip,
+          req.ip || 'unknown',
           req.get('User-Agent'),
           req.user.userId
         );
@@ -119,7 +120,7 @@ export class AuthMiddleware {
       if (!isAdmin && requestedUserId !== currentUserId) {
         this.logger.logSecurity(
           `Unauthorized access attempt to user ${requestedUserId}`,
-          req.ip,
+          req.ip || 'unknown',
           req.get('User-Agent'),
           currentUserId
         );
@@ -149,7 +150,7 @@ export class AuthMiddleware {
       if (userStatus === 'deleted' || userStatus === 'blocked') {
         this.logger.logSecurity(
           `Blocked user access attempt: ${userStatus}`,
-          req.ip,
+          req.ip || 'unknown',
           req.get('User-Agent'),
           req.user.userId
         );
@@ -178,7 +179,7 @@ export class AuthMiddleware {
       if (requests > maxRequests) {
         this.logger.logSecurity(
           `Rate limit exceeded by user`,
-          req.ip,
+          req.ip || 'unknown',
           req.get('User-Agent'),
           req.user.userId
         );
@@ -237,7 +238,7 @@ export class AuthMiddleware {
       ResponseUtils.unauthorized(res, 'Token expirado');
     } else if (error.errorCode === 'TOKEN_INVALID') {
       this.logger.logAuth('Invalid token', undefined, undefined, false);
-      this.logger.logSecurity('Invalid token attempt', req.ip, req.get('User-Agent'));
+      this.logger.logSecurity('Invalid token attempt', req.ip || 'unknown', req.get('User-Agent'));
       ResponseUtils.unauthorized(res, 'Token inválido');
     } else {
       this.logger.error('Authentication error:', error);

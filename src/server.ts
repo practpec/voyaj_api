@@ -1,3 +1,4 @@
+// src/server.ts
 import dotenv from 'dotenv';
 
 // Cargar variables de entorno antes que cualquier otra cosa
@@ -17,9 +18,6 @@ import { ErrorHandler } from './shared/utils/ErrorUtils';
 import { ResponseUtils } from './shared/utils/ResponseUtils';
 import { SecurityUtils } from './shared/utils/SecurityUtils';
 
-// Routes
-import { userRoutes } from './modules/users/infrastructure/routes/userRoutes';
-
 class Server {
   private app: express.Application;
   private logger: LoggerService;
@@ -31,8 +29,6 @@ class Server {
     this.port = parseInt(process.env.PORT || '3000');
     
     this.initializeMiddlewares();
-    this.initializeRoutes();
-    this.initializeErrorHandling();
   }
 
   private initializeMiddlewares(): void {
@@ -150,7 +146,8 @@ class Server {
       }, 'Información de la API');
     });
 
-    // Rutas de usuarios
+    // Importar y configurar rutas (ahora sincróno, ya que usamos lazy loading en el controlador)
+    const { userRoutes } = require('./modules/users/infrastructure/routes/userRoutes');
     this.app.use('/api/users', userRoutes);
 
     // Ruta 404
@@ -207,21 +204,57 @@ class Server {
 
   public async start(): Promise<void> {
     try {
-      // Conectar a la base de datos
-      this.logger.info('Conectando a la base de datos...');
+      // 1. Validar configuración de base de datos
+      this.logger.info('🔍 Validando configuración...');
       const dbConnection = DatabaseConnection.getInstance();
-      await dbConnection.connect();
       
-      // Iniciar servidor
+      if (!dbConnection.validateConnectionString()) {
+        throw new Error('Configuración de base de datos inválida');
+      }
+      
+      // 2. Conectar a la base de datos PRIMERO
+      this.logger.info('🔌 Conectando a la base de datos...');
+      await dbConnection.connect();
+      this.logger.info('✅ Base de datos conectada exitosamente');
+      
+      // 3. Inicializar rutas DESPUÉS de la conexión
+      this.logger.info('🚧 Inicializando rutas...');
+      this.initializeRoutes(); // Ahora es sincróno
+      this.logger.info('✅ Rutas inicializadas exitosamente');
+      
+      // 4. Configurar manejo de errores
+      this.initializeErrorHandling();
+      
+      // 5. Iniciar servidor
       this.app.listen(this.port, () => {
-        this.logger.info(`🚀 Servidor iniciado en puerto ${this.port}`);
-        this.logger.info(`📡 Entorno: ${process.env.NODE_ENV}`);
+        this.logger.info('🎉 ¡Servidor iniciado exitosamente!');
+        this.logger.info(`🚀 Puerto: ${this.port}`);
+        this.logger.info(`📡 Entorno: ${process.env.NODE_ENV || 'development'}`);
         this.logger.info(`🔗 URL: http://localhost:${this.port}`);
         this.logger.info(`📚 API Info: http://localhost:${this.port}/api`);
         this.logger.info(`💚 Health Check: http://localhost:${this.port}/health`);
+        this.logger.info('📋 Endpoints disponibles:');
+        this.logger.info('   • POST /api/users/register');
+        this.logger.info('   • POST /api/users/login');
+        this.logger.info('   • GET  /api/users/profile');
+        this.logger.info('   • GET  /health');
       });
     } catch (error) {
-      this.logger.error('Error iniciando el servidor:', error);
+      this.logger.error('💥 Error crítico iniciando el servidor:', error);
+      
+      if (error instanceof Error) {
+        this.logger.error(`Detalles: ${error.message}`);
+        
+        // Sugerencias específicas según el tipo de error
+        if (error.message.includes('MongoDB') || error.message.includes('base de datos')) {
+          this.logger.error('💡 Sugerencias:');
+          this.logger.error('   • Verifica que MONGODB_URI esté correctamente configurada');
+          this.logger.error('   • Asegúrate de que las credenciales sean correctas');
+          this.logger.error('   • Verifica la conectividad de red a MongoDB Atlas');
+          this.logger.error('   • Revisa que la IP esté en la whitelist de MongoDB Atlas');
+        }
+      }
+      
       process.exit(1);
     }
   }

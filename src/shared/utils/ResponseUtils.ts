@@ -1,4 +1,6 @@
+// src/shared/utils/ResponseUtils.ts
 import { Response } from 'express';
+import { PaginationMeta } from './PaginationUtils'; // Importar la interfaz unificada
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -14,21 +16,11 @@ export interface ApiResponse<T = any> {
   };
 }
 
-export interface PaginationMeta {
-  page: number;
-  limit: number;
-  totalItems: number;
-  totalPages: number;
-  hasNextPage: boolean;
-  hasPreviousPage: boolean;
-  nextPage?: number;
-  previousPage?: number;
-}
-
 export class ResponseUtils {
   static handleError(res: Response<any, Record<string, any>>, error: unknown) {
     throw new Error('Method not implemented.');
   }
+  
   // Respuesta de éxito genérica
   public static success<T>(
     res: Response,
@@ -129,13 +121,21 @@ export class ResponseUtils {
     return res.status(statusCode).json(response);
   }
 
-  // Respuesta de validación fallida
-  public static validationError(
+  // Respuesta de error del servidor
+  public static serverError(
     res: Response,
-    message: string,
+    message: string = 'Error interno del servidor',
     details?: any
   ): Response {
-    return this.error(res, 400, 'VALIDATION_ERROR', message, details);
+    return this.error(res, 500, 'INTERNAL_SERVER_ERROR', message, details);
+  }
+
+  // Respuesta de recurso no encontrado
+  public static notFound(
+    res: Response,
+    message: string = 'Recurso no encontrado'
+  ): Response {
+    return this.error(res, 404, 'NOT_FOUND', message);
   }
 
   // Respuesta de no autorizado
@@ -152,39 +152,6 @@ export class ResponseUtils {
     message: string = 'Acceso prohibido'
   ): Response {
     return this.error(res, 403, 'FORBIDDEN', message);
-  }
-
-  // Respuesta de no encontrado
-  public static notFound(
-    res: Response,
-    message: string = 'Recurso no encontrado'
-  ): Response {
-    return this.error(res, 404, 'NOT_FOUND', message);
-  }
-
-  // Respuesta de conflicto
-  public static conflict(
-    res: Response,
-    message: string = 'Conflicto de recursos'
-  ): Response {
-    return this.error(res, 409, 'CONFLICT', message);
-  }
-
-  // Respuesta de rate limit
-  public static rateLimitExceeded(
-    res: Response,
-    message: string = 'Demasiadas peticiones'
-  ): Response {
-    return this.error(res, 429, 'RATE_LIMIT_EXCEEDED', message);
-  }
-
-  // Respuesta de error interno del servidor
-  public static internalServerError(
-    res: Response,
-    message: string = 'Error interno del servidor',
-    details?: any
-  ): Response {
-    return this.error(res, 500, 'INTERNAL_SERVER_ERROR', message, details);
   }
 
   // Respuesta de login exitoso
@@ -278,5 +245,21 @@ export class ResponseUtils {
     info: any
   ): Response {
     return this.success(res, info, 'Información de la API');
+  }
+
+  // Respuesta de error del servidor interno
+  public static internalServerError(
+    res: Response,
+    message: string = 'Error interno del servidor'
+  ): Response {
+    return this.serverError(res, message);
+  }
+
+  // Respuesta de límite de velocidad excedido
+  public static rateLimitExceeded(
+    res: Response,
+    message: string = 'Límite de solicitudes excedido'
+  ): Response {
+    return this.error(res, 429, 'RATE_LIMIT_EXCEEDED', message);
   }
 }

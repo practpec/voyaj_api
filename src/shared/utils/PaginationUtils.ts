@@ -1,3 +1,4 @@
+// src/shared/utils/PaginationUtils.ts
 import { APP_LIMITS } from '../constants';
 
 export interface PaginationOptions {
@@ -162,7 +163,8 @@ export class PaginationUtils {
     count: number;
   } {
     const count = data.length;
-    const nextCursor = hasMore && count > 0 ? data[count - 1]._id : undefined;
+    const lastItem = count > 0 ? data[count - 1] : undefined;
+    const nextCursor = hasMore && lastItem && lastItem._id ? lastItem._id : undefined;
 
     return {
       hasMore,
