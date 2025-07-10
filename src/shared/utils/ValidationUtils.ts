@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { APP_LIMITS, VALIDATION_PATTERNS } from '../constants';
+import { APP_LIMITS, VALIDATION_PATTERNS } from '../constants/index';
 
 export class ValidationUtils {
   // Esquemas básicos reutilizables

@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { APP_LIMITS } from '../constants';
+import { APP_LIMITS } from '../constants/index';
 
 export class SecurityUtils {
   private static readonly SALT_ROUNDS = 12;

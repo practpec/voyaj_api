@@ -1,4 +1,4 @@
-import { EVENT_TYPES } from '../../../shared/constants';
+import { EVENT_TYPES } from '../../../shared/constants/index';
 
 // Eventos del dominio de usuario
 export interface UserCreatedEventData {

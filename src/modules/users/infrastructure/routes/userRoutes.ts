@@ -181,4 +181,9 @@ router.get('/:id', generalLimiter, (req, res) =>
   getUserController().getUserById(req, res)
 );
 
+// Exportación principal
 export { router as userRoutes };
+
+// Exportación adicional para compatibilidad con require()
+module.exports = { userRoutes: router };
+module.exports.default = router;

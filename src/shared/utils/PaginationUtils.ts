@@ -1,5 +1,5 @@
 // src/shared/utils/PaginationUtils.ts
-import { APP_LIMITS } from '../constants';
+import { APP_LIMITS } from '../constants/index';
 
 export interface PaginationOptions {
   page: number;

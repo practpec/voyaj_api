@@ -1,5 +1,5 @@
 import jwt, { SignOptions } from 'jsonwebtoken';
-import { JWT_CONFIG } from '../constants';
+import { JWT_CONFIG } from '../constants/index';
 import { ErrorHandler } from '../utils/ErrorUtils';
 
 export interface TokenPayload {

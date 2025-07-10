@@ -1,5 +1,5 @@
 import { SecurityUtils } from '../../../shared/utils/SecurityUtils';
-import { APP_LIMITS } from '../../../shared/constants';
+import { APP_LIMITS } from '../../../shared/constants/index';
 
 export interface UserData {
   id: string;
