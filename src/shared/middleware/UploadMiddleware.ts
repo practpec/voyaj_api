@@ -5,22 +5,6 @@ import { LoggerService } from '../services/LoggerService';
 import { ResponseUtils } from '../utils/ResponseUtils';
 import { ALLOWED_FILE_TYPES, APP_LIMITS } from '../constants';
 
-// Extender Request para incluir archivos procesados
-declare global {
-  namespace Express {
-    interface Request {
-      processedFiles?: {
-        [fieldname: string]: {
-          url: string;
-          publicId: string;
-          originalName: string;
-          size: number;
-        }[];
-      };
-    }
-  }
-}
-
 export class UploadMiddleware {
   private static imageService = ImageService.getInstance();
   private static logger = LoggerService.getInstance();
@@ -29,7 +13,7 @@ export class UploadMiddleware {
   private static storage = multer.memoryStorage();
 
   // Filtro de archivos
-  private static fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  private static fileFilter = (req: any, file: any, cb: any) => {
     // Verificar tipo de archivo
     if (ALLOWED_FILE_TYPES.IMAGES.includes(file.mimetype)) {
       cb(null, true);
@@ -48,56 +32,35 @@ export class UploadMiddleware {
     }
   });
 
-  // Middleware para subir imagen de perfil (single)
-  public static uploadProfilePicture = [
-    this.upload.single('profilePicture'),
-    this.processProfilePicture
-  ];
-
-  // Middleware para subir múltiples imágenes de viaje
-  public static uploadTripPhotos = [
-    this.upload.array('photos', 10),
-    this.processTripPhotos
-  ];
-
-  // Middleware para subir archivos mixtos
-  public static uploadMixed = [
-    this.upload.fields([
-      { name: 'profilePicture', maxCount: 1 },
-      { name: 'photos', maxCount: 10 },
-      { name: 'documents', maxCount: 5 }
-    ]),
-    this.processMixedFiles
-  ];
-
   // Procesar imagen de perfil
-  private static processProfilePicture = async (
+  public static processProfilePicture = async (
     req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.file) {
+      const file = (req as any).file;
+      if (!file) {
         next();
         return;
       }
 
-      this.logger.info(`Procesando imagen de perfil: ${req.file.originalname}`);
+      this.logger.info(`Procesando imagen de perfil: ${file.originalname}`);
 
       // Subir a Cloudinary con transformaciones para perfil
       const result = await this.imageService.uploadProfilePicture(
-        req.file.buffer,
-        req.file.originalname,
-        req.user?.userId
+        file.buffer,
+        file.originalname,
+        (req as any).user?.userId
       );
 
       // Agregar resultado al request
-      req.processedFiles = {
+      (req as any).processedFiles = {
         profilePicture: [{
           url: result.url,
           publicId: result.publicId,
-          originalName: req.file.originalname,
-          size: req.file.size
+          originalName: file.originalname,
+          size: file.size
         }]
       };
 
@@ -109,25 +72,32 @@ export class UploadMiddleware {
     }
   };
 
+  // Middleware para subir imagen de perfil (single)
+  public static uploadProfilePicture = [
+    this.upload.single('profilePicture'),
+    this.processProfilePicture
+  ];
+
   // Procesar fotos de viaje
-  private static processTripPhotos = async (
+  public static processTripPhotos = async (
     req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+      const files = (req as any).files;
+      if (!files || !Array.isArray(files) || files.length === 0) {
         next();
         return;
       }
 
-      this.logger.info(`Procesando ${req.files.length} fotos de viaje`);
+      this.logger.info(`Procesando ${files.length} fotos de viaje`);
 
-      const uploadPromises = req.files.map(async (file) => {
+      const uploadPromises = files.map(async (file: any) => {
         const result = await this.imageService.uploadTripPhoto(
           file.buffer,
           file.originalname,
-          req.user?.userId
+          (req as any).user?.userId
         );
 
         return {
@@ -141,7 +111,7 @@ export class UploadMiddleware {
       const results = await Promise.all(uploadPromises);
 
       // Agregar resultados al request
-      req.processedFiles = {
+      (req as any).processedFiles = {
         photos: results
       };
 
@@ -153,20 +123,26 @@ export class UploadMiddleware {
     }
   };
 
+  // Middleware para subir múltiples imágenes de viaje
+  public static uploadTripPhotos = [
+    this.upload.array('photos', 10),
+    this.processTripPhotos
+  ];
+
   // Procesar archivos mixtos
-  private static processMixedFiles = async (
+  public static processMixedFiles = async (
     req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.files || typeof req.files !== 'object') {
+      const files = (req as any).files;
+      if (!files || typeof files !== 'object') {
         next();
         return;
       }
 
-      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-      req.processedFiles = {};
+      (req as any).processedFiles = {};
 
       // Procesar imagen de perfil
       if (files.profilePicture && files.profilePicture.length > 0) {
@@ -174,10 +150,10 @@ export class UploadMiddleware {
         const result = await this.imageService.uploadProfilePicture(
           file.buffer,
           file.originalname,
-          req.user?.userId
+          (req as any).user?.userId
         );
 
-        req.processedFiles.profilePicture = [{
+        (req as any).processedFiles.profilePicture = [{
           url: result.url,
           publicId: result.publicId,
           originalName: file.originalname,
@@ -187,11 +163,11 @@ export class UploadMiddleware {
 
       // Procesar fotos de viaje
       if (files.photos && files.photos.length > 0) {
-        const uploadPromises = files.photos.map(async (file) => {
+        const uploadPromises = files.photos.map(async (file: any) => {
           const result = await this.imageService.uploadTripPhoto(
             file.buffer,
             file.originalname,
-            req.user?.userId
+            (req as any).user?.userId
           );
 
           return {
@@ -202,16 +178,16 @@ export class UploadMiddleware {
           };
         });
 
-        req.processedFiles.photos = await Promise.all(uploadPromises);
+        (req as any).processedFiles.photos = await Promise.all(uploadPromises);
       }
 
       // Procesar documentos
       if (files.documents && files.documents.length > 0) {
-        const uploadPromises = files.documents.map(async (file) => {
+        const uploadPromises = files.documents.map(async (file: any) => {
           const result = await this.imageService.uploadDocument(
             file.buffer,
             file.originalname,
-            req.user?.userId
+            (req as any).user?.userId
           );
 
           return {
@@ -222,7 +198,7 @@ export class UploadMiddleware {
           };
         });
 
-        req.processedFiles.documents = await Promise.all(uploadPromises);
+        (req as any).processedFiles.documents = await Promise.all(uploadPromises);
       }
 
       this.logger.info('Archivos mixtos procesados exitosamente');
@@ -232,6 +208,16 @@ export class UploadMiddleware {
       ResponseUtils.error(res, 400, 'UPLOAD_ERROR', 'Error procesando archivos');
     }
   };
+
+  // Middleware para subir archivos mixtos
+  public static uploadMixed = [
+    this.upload.fields([
+      { name: 'profilePicture', maxCount: 1 },
+      { name: 'photos', maxCount: 10 },
+      { name: 'documents', maxCount: 5 }
+    ]),
+    this.processMixedFiles
+  ];
 
   // Middleware para manejar errores de multer
   public static handleUploadError = (
@@ -273,13 +259,14 @@ export class UploadMiddleware {
 
   // Limpiar archivos en caso de error
   public static cleanupOnError = async (req: Request): Promise<void> => {
-    if (req.processedFiles) {
+    const processedFiles = (req as any).processedFiles;
+    if (processedFiles) {
       const deletePromises: Promise<void>[] = [];
 
-      Object.values(req.processedFiles).forEach(files => {
-        files.forEach(file => {
+      Object.values(processedFiles).forEach((files: any) => {
+        files.forEach((file: any) => {
           deletePromises.push(
-            this.imageService.deleteImage(file.publicId).catch(error => {
+            this.imageService.deleteImage(file.publicId).catch((error: any) => {
               this.logger.warn(`Error eliminando archivo ${file.publicId}:`, error);
             })
           );
@@ -298,11 +285,12 @@ export class UploadMiddleware {
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (req.file && req.file.mimetype.startsWith('image/')) {
-        const dimensions = await this.imageService.getImageDimensions(req.file.buffer);
+      const file = (req as any).file;
+      if (file && file.mimetype.startsWith('image/')) {
+        const dimensions = await this.imageService.getImageDimensions(file.buffer);
         
         // Validar dimensiones mínimas para imagen de perfil
-        if (req.file.fieldname === 'profilePicture') {
+        if (file.fieldname === 'profilePicture') {
           if (dimensions.width < 100 || dimensions.height < 100) {
             ResponseUtils.error(
               res,

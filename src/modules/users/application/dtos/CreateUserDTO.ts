@@ -15,6 +15,11 @@ export interface LoginUserDTO {
 export interface UpdateProfileDTO {
   nombre?: string;
   url_foto_perfil?: string;
+  telefono?: string;
+  pais?: string;
+  ciudad?: string;
+  fecha_nacimiento?: Date;
+  biografia?: string;
 }
 
 // DTO para cambio de contraseña
@@ -58,6 +63,32 @@ export interface RefreshTokenDTO {
   refreshToken: string;
 }
 
+// DTO para actualización de preferencias
+export interface UpdatePreferencesDTO {
+  language?: 'es' | 'en' | 'fr' | 'pt';
+  currency?: 'USD' | 'EUR' | 'MXN' | 'GBP' | 'CAD';
+  notifications?: {
+    email?: boolean;
+    push?: boolean;
+    marketing?: boolean;
+    tripUpdates?: boolean;
+    friendRequests?: boolean;
+  };
+  privacy?: {
+    profilePublic?: boolean;
+    showEmail?: boolean;
+    allowMessages?: boolean;
+    showOnlineStatus?: boolean;
+  };
+  theme?: 'light' | 'dark' | 'auto';
+  timezone?: string;
+}
+
+// DTO para subida de avatar
+export interface UploadAvatarDTO {
+  userId: string;
+}
+
 // DTO de respuesta para usuario autenticado
 export interface AuthenticatedUserDTO {
   id: string;
@@ -67,6 +98,36 @@ export interface AuthenticatedUserDTO {
   email_verificado: boolean;
   creado_en: Date;
   ultimo_acceso?: Date;
+  telefono?: string;
+  pais?: string;
+  ciudad?: string;
+  fecha_nacimiento?: Date;
+  biografia?: string;
+  preferencias: {
+    language: string;
+    currency: string;
+    notifications: {
+      email: boolean;
+      push: boolean;
+      marketing: boolean;
+      tripUpdates: boolean;
+      friendRequests: boolean;
+    };
+    privacy: {
+      profilePublic: boolean;
+      showEmail: boolean;
+      allowMessages: boolean;
+      showOnlineStatus: boolean;
+    };
+    theme: string;
+    timezone: string;
+  };
+  plan: string;
+  esta_activo: boolean;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  age?: number;
 }
 
 // DTO de respuesta para login/registro exitoso
@@ -101,6 +162,12 @@ export interface UserSearchResultDTO {
   correo_electronico: string;
   nombre?: string;
   url_foto_perfil?: string;
+}
+
+// DTO de respuesta para avatar subido
+export interface AvatarUploadResponseDTO {
+  url: string;
+  message: string;
 }
 
 // DTO para estadísticas de usuarios (admin)
@@ -150,7 +217,19 @@ export class UserDTOMapper {
       url_foto_perfil: user.url_foto_perfil || user.profilePictureUrl,
       email_verificado: user.email_verificado || user.isEmailVerified,
       creado_en: user.creado_en || user.createdAt,
-      ultimo_acceso: user.ultimo_acceso || user.lastAccess
+      ultimo_acceso: user.ultimo_acceso || user.lastAccess,
+      telefono: user.telefono || user.phone,
+      pais: user.pais || user.country,
+      ciudad: user.ciudad || user.city,
+      fecha_nacimiento: user.fecha_nacimiento || user.birthDate,
+      biografia: user.biografia || user.bio,
+      preferencias: user.preferencias || user.preferences,
+      plan: user.plan,
+      esta_activo: user.esta_activo || user.isActive,
+      fullName: user.fullName,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      age: user.age
     };
   }
 
@@ -180,6 +259,13 @@ export class UserDTOMapper {
     return {
       user: this.toAuthenticatedUser(user),
       tokens
+    };
+  }
+
+  public static toAvatarResponse(url: string): AvatarUploadResponseDTO {
+    return {
+      url,
+      message: 'Avatar actualizado exitosamente'
     };
   }
 }

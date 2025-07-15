@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Usuario",
-    "description": "Colección de endpoints para la gestión de usuarios en Voyaj API (Basado en BD Real)",
+    "name": "Voyaj API - Usuarios (Corregido)",
+    "description": "Colección completa y corregida para la gestión de usuarios en Voyaj API",
     "version": "1.0.0",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -91,7 +91,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correo_electronico\": \"blackclic146@gmail.com\",\n  \"password\": \"Password123!\",\n  \"nombre\": \"Juan Carlos\"\n}"
+              "raw": "{\n  \"correo_electronico\": \"usuario@ejemplo.com\",\n  \"password\": \"Password123!\",\n  \"nombre\": \"Juan Carlos Pérez\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/users/register",
@@ -131,7 +131,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correo_electronico\": \"blackclic146@gmail.com\",\n  \"password\": \"Password123!\"\n}"
+              "raw": "{\n  \"correo_electronico\": \"usuario@ejemplo.com\",\n  \"password\": \"Password123!\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/users/login",
@@ -149,8 +149,9 @@
                 "exec": [
                   "if (pm.response.to.have.status(200)) {",
                   "    const responseJson = pm.response.json();",
-                  "    if (responseJson.data && responseJson.data.accessToken) {",
-                  "        pm.collectionVariables.set('authToken', responseJson.data.accessToken);",
+                  "    if (responseJson.data && responseJson.data.tokens) {",
+                  "        pm.collectionVariables.set('authToken', responseJson.data.tokens.accessToken);",
+                  "        pm.collectionVariables.set('refreshToken', responseJson.data.tokens.refreshToken);",
                   "    }",
                   "}"
                 ]
@@ -218,7 +219,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correo_electronico\": \"blackclic146@gmail.com\",\n  \"code\": \"123456\"\n}"
+              "raw": "{\n  \"correo_electronico\": \"usuario@ejemplo.com\",\n  \"code\": \"123456\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/users/verify-email",
@@ -239,7 +240,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correo_electronico\": \"blackclic146@gmail.com\"\n}"
+              "raw": "{\n  \"correo_electronico\": \"usuario@ejemplo.com\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/users/resend-verification",
@@ -265,7 +266,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correo_electronico\": \"blackclic146@gmail.com\"\n}"
+              "raw": "{\n  \"correo_electronico\": \"usuario@ejemplo.com\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/users/forgot-password",
@@ -286,7 +287,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correo_electronico\": \"blackclic146@gmail.com\",\n  \"code\": \"123456\",\n  \"newPassword\": \"NewPassword123!\"\n}"
+              "raw": "{\n  \"correo_electronico\": \"usuario@ejemplo.com\",\n  \"code\": \"123456\",\n  \"newPassword\": \"NewPassword123!\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/users/reset-password",
@@ -301,7 +302,7 @@
       "name": "Gestión de Perfil",
       "item": [
         {
-          "name": "Obtener Perfil",
+          "name": "Obtener Perfil Completo",
           "request": {
             "method": "GET",
             "header": [
@@ -318,7 +319,7 @@
           }
         },
         {
-          "name": "Actualizar Perfil",
+          "name": "Actualizar Perfil Básico",
           "request": {
             "method": "PUT",
             "header": [
@@ -333,7 +334,32 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nombre\": \"Juan Carlos Pérez\",\n  \"url_foto_perfil\": \"https://example.com/new-photo.jpg\"\n}"
+              "raw": "{\n  \"nombre\": \"Juan Carlos Pérez\",\n  \"url_foto_perfil\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar Perfil Extendido",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Juan Carlos Pérez González\",\n  \"telefono\": \"+52 55 1234 5678\",\n  \"pais\": \"México\",\n  \"ciudad\": \"Ciudad de México\",\n  \"fecha_nacimiento\": \"1990-05-15\",\n  \"biografia\": \"Apasionado por los viajes y la fotografía. Siempre en busca de nuevas aventuras.\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/users/profile",
@@ -358,7 +384,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"NewPassword123!\",\n  \"confirmPassword\": \"NewPassword123!\"\n}"
+              "raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"NewPassword123!\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/users/change-password",
@@ -387,6 +413,63 @@
       ]
     },
     {
+      "name": "Gestión de Avatar y Preferencias",
+      "item": [
+        {
+          "name": "Subir Avatar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "profilePicture",
+                  "type": "file",
+                  "description": "Imagen de perfil (JPG, PNG, WebP, GIF - Max: 10MB)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/avatar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "avatar"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar Preferencias",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"language\": \"es\",\n  \"currency\": \"MXN\",\n  \"theme\": \"auto\",\n  \"timezone\": \"America/Mexico_City\",\n  \"notifications\": {\n    \"email\": true,\n    \"push\": true,\n    \"marketing\": false,\n    \"tripUpdates\": true,\n    \"friendRequests\": true\n  },\n  \"privacy\": {\n    \"profilePublic\": true,\n    \"showEmail\": false,\n    \"allowMessages\": true,\n    \"showOnlineStatus\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "preferences"]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Búsqueda y Consulta",
       "item": [
         {
@@ -401,13 +484,13 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/users/search?query=Juan Carlos&page=1&limit=10&sortBy=nombre&sortOrder=asc",
+              "raw": "{{baseUrl}}/api/users/search?query=Juan&page=1&limit=10&sortBy=nombre&sortOrder=asc",
               "host": ["{{baseUrl}}"],
               "path": ["api", "users", "search"],
               "query": [
                 {
                   "key": "query",
-                  "value": "Juan Carlos",
+                  "value": "Juan",
                   "description": "Término de búsqueda (nombre, email)"
                 },
                 {
@@ -443,87 +526,6 @@
               "raw": "{{baseUrl}}/api/users/{{userId}}",
               "host": ["{{baseUrl}}"],
               "path": ["api", "users", "{{userId}}"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Gestión de Imágenes",
-      "item": [
-        {
-          "name": "Subir Imagen de Perfil",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "profilePicture",
-                  "type": "file",
-                  "description": "Imagen de perfil (JPG, PNG, WebP, GIF - Max: 10MB)"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/users/profile/picture",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "users", "profile", "picture"]
-            }
-          }
-        },
-        {
-          "name": "Eliminar Imagen de Perfil",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/users/profile/picture",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "users", "profile", "picture"]
-            }
-          }
-        },
-        {
-          "name": "Subir Múltiples Fotos",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "photos",
-                  "type": "file",
-                  "description": "Hasta 10 fotos (JPG, PNG, WebP, GIF)"
-                },
-                {
-                  "key": "photos",
-                  "type": "file",
-                  "description": "Foto adicional"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/users/photos",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "users", "photos"]
             }
           }
         }
@@ -603,7 +605,12 @@
         "type": "text/javascript",
         "exec": [
           "console.log('Response status:', pm.response.code);",
-          "console.log('Response time:', pm.response.responseTime + 'ms');"
+          "console.log('Response time:', pm.response.responseTime + 'ms');",
+          "",
+          "// Mostrar respuesta si hay error",
+          "if (pm.response.code >= 400) {",
+          "    console.log('Error response:', pm.response.text());",
+          "}"
         ]
       }
     }

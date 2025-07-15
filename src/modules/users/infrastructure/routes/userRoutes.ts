@@ -1,7 +1,8 @@
 // src/modules/users/infrastructure/routes/userRoutes.ts
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { UserController } from '../controllers/UserController';
 import { AuthMiddleware } from '../../../../shared/middleware/AuthMiddleware';
+import { UploadMiddleware } from '../../../../shared/middleware/UploadMiddleware';
 import rateLimit from 'express-rate-limit';
 import { RATE_LIMITS } from '../../../../shared/constants';
 
@@ -162,6 +163,24 @@ router.delete('/account',
   AuthMiddleware.authenticate,
   AuthMiddleware.checkUserStatus,
   (req, res) => getUserController().deleteAccount(req, res)
+);
+
+// Subida de avatar
+router.post('/avatar',
+  generalLimiter,
+  AuthMiddleware.authenticate,
+  AuthMiddleware.checkUserStatus,
+  UploadMiddleware.uploadProfilePicture,
+  UploadMiddleware.handleUploadError,
+  (req: Request, res: Response) => getUserController().uploadAvatar(req, res)
+);
+
+// Actualizar preferencias
+router.put('/preferences',
+  generalLimiter,
+  AuthMiddleware.authenticate,
+  AuthMiddleware.checkUserStatus,
+  (req: Request, res: Response) => getUserController().updatePreferences(req, res)
 );
 
 // ============================================================================

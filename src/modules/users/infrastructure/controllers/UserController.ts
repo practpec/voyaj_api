@@ -5,6 +5,7 @@ import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import { EmailService } from '../../../../shared/services/EmailService';
 import { EventBus } from '../../../../shared/events/EventBus';
+import { ImageService } from '../../../../shared/services/ImageService';
 
 // Use Cases
 import { CreateUserUseCase } from '../../application/useCases/CreateUser';
@@ -23,15 +24,19 @@ import { SearchUsersUseCase } from '../../application/useCases/SearchUsers';
 import { GetUserByIdUseCase } from '../../application/useCases/GetUserById';
 import { RestoreUserUseCase } from '../../application/useCases/RestoreUser';
 import { GetUserStatsUseCase } from '../../application/useCases/GetUserStats';
+import { UploadAvatarUseCase } from '../../application/useCases/UploadAvatar';
+import { UpdatePreferencesUseCase } from '../../application/useCases/UpdatePreferences';
 
 // Repository
 import { UserMongoRepository } from '../repositories/UserMongoRepository';
+import { UserDTOMapper } from '../../application/dtos/CreateUserDTO';
 
 export class UserController {
   private logger: LoggerService;
   private emailService: EmailService;
   private eventBus: EventBus;
   private userRepository: UserMongoRepository;
+  private imageService: ImageService;
 
   // Use Cases - se inicializan en el constructor
   private createUserUseCase: CreateUserUseCase;
@@ -50,6 +55,8 @@ export class UserController {
   private getUserByIdUseCase: GetUserByIdUseCase;
   private restoreUserUseCase: RestoreUserUseCase;
   private getUserStatsUseCase: GetUserStatsUseCase;
+  private uploadAvatarUseCase: UploadAvatarUseCase;
+  private updatePreferencesUseCase: UpdatePreferencesUseCase;
 
   constructor() {
     // Inicializar servicios
@@ -57,6 +64,7 @@ export class UserController {
     this.emailService = EmailService.getInstance();
     this.eventBus = EventBus.getInstance();
     this.userRepository = new UserMongoRepository();
+    this.imageService = ImageService.getInstance();
 
     // Inicializar casos de uso
     this.createUserUseCase = new CreateUserUseCase(
@@ -148,6 +156,17 @@ export class UserController {
       this.userRepository,
       this.emailService,
       this.eventBus,
+      this.logger
+    );
+
+    this.uploadAvatarUseCase = new UploadAvatarUseCase(
+      this.userRepository,
+      this.imageService,
+      this.logger
+    );
+    
+    this.updatePreferencesUseCase = new UpdatePreferencesUseCase(
+      this.userRepository,
       this.logger
     );
   }
@@ -314,7 +333,19 @@ export class UserController {
   public getProfile = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      const profile = await this.getProfileUseCase.execute(userId);
+      const user = await this.userRepository.findById(userId);
+      
+      if (!user) {
+        ResponseUtils.error(res, 404, 'USER_NOT_FOUND', 'Usuario no encontrado');
+        return;
+      }
+
+      if (user.isDeleted) {
+        ResponseUtils.error(res, 400, 'USER_DELETED', 'Usuario eliminado');
+        return;
+      }
+
+      const profile = UserDTOMapper.toAuthenticatedUser(user.toPublicData());
       ResponseUtils.success(res, profile, 'Perfil obtenido exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
@@ -332,7 +363,40 @@ export class UserController {
   public updateProfile = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      const updatedProfile = await this.updateProfileUseCase.execute(userId, req.body);
+      const user = await this.userRepository.findById(userId);
+      
+      if (!user) {
+        ResponseUtils.error(res, 404, 'USER_NOT_FOUND', 'Usuario no encontrado');
+        return;
+      }
+
+      if (user.isDeleted) {
+        ResponseUtils.error(res, 400, 'USER_DELETED', 'Usuario eliminado');
+        return;
+      }
+
+      // Actualizar perfil básico
+      user.updateProfile(req.body.nombre, req.body.url_foto_perfil);
+      
+      // Actualizar campos extendidos si hay datos usando los métodos que ya existen
+      if (req.body.telefono !== undefined || req.body.pais !== undefined || 
+          req.body.ciudad !== undefined || req.body.fecha_nacimiento !== undefined || 
+          req.body.biografia !== undefined) {
+        
+        // Usar el método updateExtendedProfile que está en el modelo User
+        const updates: any = {};
+        if (req.body.telefono !== undefined) updates.phone = req.body.telefono;
+        if (req.body.pais !== undefined) updates.country = req.body.pais;
+        if (req.body.ciudad !== undefined) updates.city = req.body.ciudad;
+        if (req.body.fecha_nacimiento !== undefined) updates.birthDate = new Date(req.body.fecha_nacimiento);
+        if (req.body.biografia !== undefined) updates.bio = req.body.biografia;
+        
+        user.updateExtendedProfile(updates);
+      }
+
+      await this.userRepository.update(user);
+      
+      const updatedProfile = UserDTOMapper.toAuthenticatedUser(user.toPublicData());
       ResponseUtils.profileUpdated(res, updatedProfile);
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
@@ -383,6 +447,60 @@ export class UserController {
   };
 
   // ============================================================================
+  // NUEVOS ENDPOINTS
+  // ============================================================================
+
+  // POST /api/users/avatar
+  public uploadAvatar = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const file = (req as any).file;
+      if (!file) {
+        ResponseUtils.error(res, 400, 'MISSING_FILE', 'Archivo de imagen requerido');
+        return;
+      }
+
+      const userId = req.user!.userId;
+      
+      const result = await this.uploadAvatarUseCase.execute(userId, {
+        buffer: file.buffer,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
+      });
+
+      ResponseUtils.success(res, result, 'Avatar actualizado exitosamente');
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // PUT /api/users/preferences
+  public updatePreferences = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.userId;
+      const updatedProfile = await this.updatePreferencesUseCase.execute(userId, req.body);
+      
+      ResponseUtils.success(res, updatedProfile, 'Preferencias actualizadas exitosamente');
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // ============================================================================
   // ENDPOINTS DE BÚSQUEDA Y CONSULTA
   // ============================================================================
 
@@ -408,93 +526,58 @@ export class UserController {
     }
   };
 
-  // Correcciones para los métodos problemáticos del UserController
+  // GET /api/users/:id
+  public getUserById = async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.params.id) {
+        ResponseUtils.error(res, 400, 'INVALID_PARAMS', 'ID de usuario requerido');
+        return;
+      }
 
-// GET /api/users/:id - Corregir el return
-public getUserById = async (req: Request, res: Response): Promise<void> => {
-  try {
-    // Validar que el ID esté presente
-    if (!req.params.id) {
-      ResponseUtils.error(res, 400, 'INVALID_PARAMS', 'ID de usuario requerido');
-      return; // Sin return del ResponseUtils
+      const user = await this.getUserByIdUseCase.execute(req.params.id);
+      ResponseUtils.success(res, user, 'Usuario obtenido exitosamente');
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
     }
+  };
 
-    const user = await this.getUserByIdUseCase.execute(req.params.id);
-    ResponseUtils.success(res, user, 'Usuario obtenido exitosamente');
-  } catch (error) {
-    const errorResponse = ErrorHandler.handleError(error as Error);
-    ResponseUtils.error(
-      res,
-      errorResponse.statusCode,
-      errorResponse.errorCode,
-      errorResponse.message,
-      errorResponse.details
-    );
-  }
-};
+  // POST /api/users/:id/restore
+  public restoreUser = async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.params.id) {
+        ResponseUtils.error(res, 400, 'INVALID_PARAMS', 'ID de usuario requerido');
+        return;
+      }
 
-// POST /api/users/:id/restore - Corregir los returns
-public restoreUser = async (req: Request, res: Response): Promise<void> => {
-  try {
-    // Validar que el ID esté presente
-    if (!req.params.id) {
-      ResponseUtils.error(res, 400, 'INVALID_PARAMS', 'ID de usuario requerido');
-      return; // Sin return del ResponseUtils
+      const userId = req.params.id;
+      const adminUserId = req.user?.userId;
+
+      if (!adminUserId) {
+        ResponseUtils.error(res, 401, 'UNAUTHORIZED', 'Usuario administrador requerido');
+        return;
+      }
+
+      const restoredUser = await this.restoreUserUseCase.execute(userId, adminUserId);
+      ResponseUtils.success(res, restoredUser, 'Usuario restaurado exitosamente');
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
     }
+  };
 
-    const userId = req.params.id;
-    const adminUserId = req.user?.userId;
-
-    if (!adminUserId) {
-      ResponseUtils.error(res, 401, 'UNAUTHORIZED', 'Usuario administrador requerido');
-      return; // Sin return del ResponseUtils
-    }
-
-    const restoredUser = await this.restoreUserUseCase.execute(userId, adminUserId);
-    ResponseUtils.success(res, restoredUser, 'Usuario restaurado exitosamente');
-  } catch (error) {
-    const errorResponse = ErrorHandler.handleError(error as Error);
-    ResponseUtils.error(
-      res,
-      errorResponse.statusCode,
-      errorResponse.errorCode,
-      errorResponse.message,
-      errorResponse.details
-    );
-  }
-};
-
-// GET /api/users/health - Simplificar el healthCheck
-public healthCheck = async (req: Request, res: Response): Promise<void> => {
-  try {
-    // Verificar conexión básica sin métodos que no existen
-    const healthStatus = {
-      status: 'ok',
-      timestamp: new Date(),
-      uptime: process.uptime(),
-      database: {
-        connected: true, // Simplificado por ahora
-        ping: 'N/A'
-      },
-      cache: {
-        size: 0, // Simplificado por ahora
-        memoryUsage: process.memoryUsage().heapUsed
-      },
-      version: process.env.APP_VERSION || '1.0.0'
-    };
-
-    ResponseUtils.healthCheck(res, healthStatus);
-  } catch (error) {
-    const errorResponse = ErrorHandler.handleError(error as Error);
-    ResponseUtils.error(
-      res,
-      errorResponse.statusCode,
-      errorResponse.errorCode,
-      errorResponse.message,
-      errorResponse.details
-    );
-  }
-};
   // ============================================================================
   // ENDPOINTS DE ADMINISTRACIÓN
   // ============================================================================
@@ -516,12 +599,40 @@ public healthCheck = async (req: Request, res: Response): Promise<void> => {
     }
   };
 
-
   // ============================================================================
   // ENDPOINTS DEL SISTEMA
   // ============================================================================
 
   // GET /api/users/health
+  public healthCheck = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const healthStatus = {
+        status: 'ok',
+        timestamp: new Date(),
+        uptime: process.uptime(),
+        database: {
+          connected: true,
+          ping: 'N/A'
+        },
+        cache: {
+          size: 0,
+          memoryUsage: process.memoryUsage().heapUsed
+        },
+        version: process.env.APP_VERSION || '1.0.0'
+      };
+
+      ResponseUtils.healthCheck(res, healthStatus);
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
 
   // GET /api/users (info de la API)
   public apiInfo = async (req: Request, res: Response): Promise<void> => {
@@ -549,6 +660,8 @@ public healthCheck = async (req: Request, res: Response): Promise<void> => {
             'GET /api/users/profile',
             'PUT /api/users/profile',
             'PUT /api/users/change-password',
+            'POST /api/users/avatar',
+            'PUT /api/users/preferences',
             'DELETE /api/users/account'
           ],
           search: [

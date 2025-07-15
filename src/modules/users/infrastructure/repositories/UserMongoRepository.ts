@@ -22,32 +22,27 @@ export class UserMongoRepository implements IUserRepository {
   private async createIndexes(): Promise<void> {
     try {
       await Promise.all([
-        // Índice único para email
+        // Índices existentes
         this.collection.createIndex(
           { correo_electronico: 1 },
           { unique: true, background: true }
         ),
-        // Índice para búsquedas por nombre
         this.collection.createIndex(
           { nombre: 'text', correo_electronico: 'text' },
           { background: true }
         ),
-        // Índice para usuarios eliminados
         this.collection.createIndex(
           { esta_eliminado: 1 },
           { background: true }
         ),
-        // Índice para usuarios bloqueados
         this.collection.createIndex(
           { bloqueado_hasta: 1 },
           { background: true, sparse: true }
         ),
-        // Índice para refresh tokens
         this.collection.createIndex(
           { refresh_tokens: 1 },
           { background: true, sparse: true }
         ),
-        // Índice para códigos de verificación
         this.collection.createIndex(
           { 
             correo_electronico: 1, 
@@ -56,7 +51,6 @@ export class UserMongoRepository implements IUserRepository {
           },
           { background: true, sparse: true }
         ),
-        // Índice para códigos de recuperación
         this.collection.createIndex(
           { 
             correo_electronico: 1,
@@ -65,16 +59,97 @@ export class UserMongoRepository implements IUserRepository {
           },
           { background: true, sparse: true }
         ),
-        // Índice para fecha de creación
         this.collection.createIndex(
           { creado_en: -1 },
           { background: true }
+        ),
+
+        // NUEVOS ÍNDICES para campos extendidos
+        // Índice para búsquedas por país
+        this.collection.createIndex(
+          { pais: 1 },
+          { background: true, sparse: true }
+        ),
+        
+        // Índice para búsquedas por ciudad
+        this.collection.createIndex(
+          { ciudad: 1 },
+          { background: true, sparse: true }
+        ),
+        
+        // Índice compuesto para búsquedas por ubicación
+        this.collection.createIndex(
+          { pais: 1, ciudad: 1 },
+          { background: true, sparse: true }
+        ),
+        
+        // Índice para fecha de nacimiento (útil para estadísticas por edad)
+        this.collection.createIndex(
+          { fecha_nacimiento: 1 },
+          { background: true, sparse: true }
+        ),
+        
+        // Índice para plan de usuario
+        this.collection.createIndex(
+          { plan: 1 },
+          { background: true }
+        ),
+        
+        // Índice para usuarios activos
+        this.collection.createIndex(
+          { esta_activo: 1 },
+          { background: true }
+        ),
+        
+        // Índice compuesto para usuarios activos no eliminados
+        this.collection.createIndex(
+          { esta_activo: 1, esta_eliminado: 1 },
+          { background: true }
+        ),
+        
+        // Índice para teléfono (si se implementa verificación por SMS)
+        this.collection.createIndex(
+          { telefono: 1 },
+          { background: true, sparse: true }
+        ),
+        
+        // Índice para búsquedas de texto extendidas
+        this.collection.createIndex(
+          { 
+            nombre: 'text', 
+            correo_electronico: 'text',
+            biografia: 'text',
+            pais: 'text',
+            ciudad: 'text'
+          },
+          { 
+            background: true,
+            weights: {
+              nombre: 10,
+              correo_electronico: 5,
+              biografia: 1,
+              pais: 2,
+              ciudad: 2
+            }
+          }
+        ),
+        
+        // Índice para preferencias de idioma (útil para estadísticas)
+        this.collection.createIndex(
+          { 'preferencias.language': 1 },
+          { background: true, sparse: true }
+        ),
+        
+        // Índice para preferencias de moneda
+        this.collection.createIndex(
+          { 'preferencias.currency': 1 },
+          { background: true, sparse: true }
         )
       ]);
       
-      this.logger.info('Índices de usuarios creados exitosamente');
+      this.logger.info('Índices de usuarios (extendidos) creados exitosamente');
     } catch (error) {
-      this.logger.error('Error creando índices de usuarios:', error);
+      this.logger.error('Error creando índices extendidos de usuarios:', error);
     }
   }
 
