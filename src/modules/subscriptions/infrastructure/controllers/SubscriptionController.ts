@@ -1,4 +1,4 @@
-// src/modules/subscriptions/infrastructure/controllers/SubscriptionController.ts
+// src/modules/subscriptions/infrastructure/controllers/SubscriptionController.ts - Updated
 import { Request, Response } from 'express';
 import { ResponseUtils } from '../../../../shared/utils/ResponseUtils';
 import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
@@ -15,6 +15,7 @@ import { GetAvailablePlansUseCase } from '../../application/useCases/GetAvailabl
 import { StripeService } from '../services/StripeService';
 import { SubscriptionMongoRepository } from '../repositories/SubscriptionMongoRepository';
 import { UserMongoRepository } from '../../../users/infrastructure/repositories/UserMongoRepository';
+import { PLAN_LIMITS } from '../../../../shared/constants/paymentConstants';
 
 export class SubscriptionController {
   private logger: LoggerService;
@@ -156,8 +157,7 @@ export class SubscriptionController {
         return;
       }
 
-      const { PLAN_LIMITS } = require('../../../../shared/constants/paymentConstants');
-      const planConfig = PLAN_LIMITS[newPlan];
+      const planConfig = PLAN_LIMITS[newPlan as keyof typeof PLAN_LIMITS];
       
       await this.stripeService.changePlan(subscription.stripeSubscriptionId, planConfig.priceId);
 
@@ -227,8 +227,7 @@ export class SubscriptionController {
       );
 
       // Obtener configuración del plan
-      const { PLAN_LIMITS } = require('../../../../shared/constants/paymentConstants');
-      const planConfig = PLAN_LIMITS[plan];
+      const planConfig = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS];
 
       if (!planConfig || !planConfig.priceId) {
         ResponseUtils.error(res, 400, 'INVALID_PLAN', 'Plan no válido');
@@ -365,18 +364,18 @@ export class SubscriptionController {
         await Promise.all([
           this.subscriptionRepository.countActiveSubscriptions(),
           this.subscriptionRepository.countCanceledSubscriptions(),
-          this.subscriptionRepository.countSubscriptionsByPlan('explorador'),
-          this.subscriptionRepository.countSubscriptionsByPlan('aventurero'),
-          this.subscriptionRepository.countSubscriptionsByPlan('nomada')
+          this.subscriptionRepository.countSubscriptionsByPlan('EXPLORADOR'),
+          this.subscriptionRepository.countSubscriptionsByPlan('AVENTURERO'),
+          this.subscriptionRepository.countSubscriptionsByPlan('NOMADA')
         ]);
 
       const stats = {
         totalActive,
         totalCanceled,
         byPlan: {
-          'explorador': explorerCount,
-          'aventurero': adventurerCount,
-          'nomada': nomadCount
+          'EXPLORADOR': explorerCount,
+          'AVENTURERO': adventurerCount,
+          'NOMADA': nomadCount
         },
         growth: {
           thisMonth: 0, // Implementar lógica de crecimiento

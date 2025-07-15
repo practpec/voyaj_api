@@ -22,7 +22,7 @@ export interface SubscriptionData {
 }
 
 export class Subscription {
-  private data: SubscriptionData;
+  public data: SubscriptionData;
 
   constructor(subscriptionData: SubscriptionData) {
     this.data = { ...subscriptionData };
@@ -195,7 +195,7 @@ export class Subscription {
   }
 
   // Obtener límite específico
-  public getLimit(limitType: keyof typeof PLAN_LIMITS.explorador): number | boolean | string[] {
+  public getLimit(limitType: keyof typeof PLAN_LIMITS.EXPLORADOR): number | boolean | string[] {
     return this.planLimits[limitType];
   }
 
