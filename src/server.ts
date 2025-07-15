@@ -156,6 +156,16 @@ class Server {
       this.logger.error('❌ Error cargando rutas de usuarios:', error);
       throw new Error(`Error cargando rutas: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+
+    try {
+    this.logger.info('🔄 Cargando rutas de suscripciones...');
+    const { subscriptionRoutes } = require('./modules/subscriptions/infrastructure/routes/subscriptionRoutes');
+    this.app.use('/api/subscriptions', subscriptionRoutes);
+    this.logger.info('✅ Rutas de suscripciones cargadas exitosamente');
+  } catch (error) {
+    this.logger.error('❌ Error cargando rutas de suscripciones:', error);
+    throw new Error(`Error cargando rutas de suscripciones: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
   }
 
   private initializeErrorHandling(): void {
