@@ -1,0 +1,180 @@
+// src/modules/subscriptions/infrastructure/events/SubscriptionEventHandlers.ts
+import { EventHandler } from '../../../../shared/events/EventHandler';
+import { NotificationService } from '../services/NotificationService';
+import { IUserRepository } from '../../../users/domain/interfaces/IUserRepository';
+import { LoggerService } from '../../../../shared/services/LoggerService';
+import {
+  SubscriptionCreatedEventData,
+  SubscriptionCanceledEventData,
+  PaymentSucceededEventData,
+  PaymentFailedEventData,
+  TrialEndingSoonEventData,
+  SUBSCRIPTION_EVENT_TYPES
+} from '../../domain/SubscriptionEvents';
+
+export class SubscriptionEventHandlers {
+  constructor(
+    private notificationService: NotificationService,
+    private userRepository: IUserRepository,
+    private logger: LoggerService
+  ) {}
+
+  // Configurar todos los manejadores de eventos
+  public registerHandlers(eventHandler: EventHandler): void {
+    eventHandler.on(
+      SUBSCRIPTION_EVENT_TYPES.SUBSCRIPTION_CREATED,
+      this.handleSubscriptionCreated.bind(this)
+    );
+
+    eventHandler.on(
+      SUBSCRIPTION_EVENT_TYPES.SUBSCRIPTION_CANCELED,
+      this.handleSubscriptionCanceled.bind(this)
+    );
+
+    eventHandler.on(
+      SUBSCRIPTION_EVENT_TYPES.PAYMENT_SUCCEEDED,
+      this.handlePaymentSucceeded.bind(this)
+    );
+
+    eventHandler.on(
+      SUBSCRIPTION_EVENT_TYPES.PAYMENT_FAILED,
+      this.handlePaymentFailed.bind(this)
+    );
+
+    eventHandler.on(
+      SUBSCRIPTION_EVENT_TYPES.TRIAL_ENDING_SOON,
+      this.handleTrialEndingSoon.bind(this)
+    );
+  }
+
+  // Manejar creación de suscripción
+  private async handleSubscriptionCreated(data: SubscriptionCreatedEventData): Promise<void> {
+    try {
+      const user = await this.userRepository.findById(data.userId);
+      
+      if (!user) {
+        this.logger.warn(`Usuario no encontrado para suscripción creada: ${data.userId}`);
+        return;
+      }
+
+      // Enviar email de bienvenida
+      await this.notificationService.sendWelcomeEmail({
+        userId: data.userId,
+        email: user.email,
+        name: user.name,
+        plan: data.plan
+      });
+
+      this.logger.info(`Email de bienvenida enviado para nueva suscripción: ${data.subscriptionId}`);
+
+    } catch (error) {
+      this.logger.error('Error manejando creación de suscripción:', error);
+    }
+  }
+
+  // Manejar cancelación de suscripción
+  private async handleSubscriptionCanceled(data: SubscriptionCanceledEventData): Promise<void> {
+    try {
+      const user = await this.userRepository.findById(data.userId);
+      
+      if (!user) {
+        this.logger.warn(`Usuario no encontrado para suscripción cancelada: ${data.userId}`);
+        return;
+      }
+
+      // Enviar notificación de cancelación
+      await this.notificationService.sendCancellationNotification({
+        userId: data.userId,
+        email: user.email,
+        name: user.name,
+        plan: data.plan
+      });
+
+      this.logger.info(`Notificación de cancelación enviada: ${data.subscriptionId}`);
+
+    } catch (error) {
+      this.logger.error('Error manejando cancelación de suscripción:', error);
+    }
+  }
+
+  // Manejar pago exitoso
+  private async handlePaymentSucceeded(data: PaymentSucceededEventData): Promise<void> {
+    try {
+      const user = await this.userRepository.findById(data.userId);
+      
+      if (!user) {
+        this.logger.warn(`Usuario no encontrado para pago exitoso: ${data.userId}`);
+        return;
+      }
+
+      // Enviar confirmación de pago solo si es renovación (no primer pago)
+      // Se puede determinar por el invoiceId o agregar más lógica
+      await this.notificationService.sendPaymentSuccessNotification({
+        userId: data.userId,
+        email: user.email,
+        name: user.name
+      });
+
+      this.logger.info(`Confirmación de pago enviada: ${data.subscriptionId}`);
+
+    } catch (error) {
+      this.logger.error('Error manejando pago exitoso:', error);
+    }
+  }
+
+  // Manejar pago fallido
+  private async handlePaymentFailed(data: PaymentFailedEventData): Promise<void> {
+    try {
+      const user = await this.userRepository.findById(data.userId);
+      
+      if (!user) {
+        this.logger.warn(`Usuario no encontrado para pago fallido: ${data.userId}`);
+        return;
+      }
+
+      // Enviar notificación de pago fallido
+      await this.notificationService.sendPaymentFailedNotification({
+        userId: data.userId,
+        email: user.email,
+        name: user.name
+      });
+
+      this.logger.warn(`Notificación de pago fallido enviada: ${data.subscriptionId}`);
+
+      // Si es el segundo intento fallido, realizar acciones adicionales
+      if (data.attemptCount >= 2) {
+        this.logger.warn(`Múltiples intentos de pago fallidos para: ${data.subscriptionId}`);
+        // Aquí podrías agregar lógica adicional como pausar la suscripción
+      }
+
+    } catch (error) {
+      this.logger.error('Error manejando pago fallido:', error);
+    }
+  }
+
+  // Manejar trial próximo a expirar
+  private async handleTrialEndingSoon(data: TrialEndingSoonEventData): Promise<void> {
+    try {
+      const user = await this.userRepository.findById(data.userId);
+      
+      if (!user) {
+        this.logger.warn(`Usuario no encontrado para trial expirando: ${data.userId}`);
+        return;
+      }
+
+      // Enviar notificación de trial próximo a expirar
+      await this.notificationService.sendTrialEndingNotification({
+        userId: data.userId,
+        email: user.email,
+        name: user.name,
+        plan: data.plan,
+        trialEndDate: data.trialEndDate
+      });
+
+      this.logger.info(`Notificación de trial expirando enviada: ${data.subscriptionId}, días restantes: ${data.daysRemaining}`);
+
+    } catch (error) {
+      this.logger.error('Error manejando trial próximo a expirar:', error);
+    }
+  }
+}

@@ -1,98 +1,105 @@
-// src/modules/subscriptions/infrastructure/routes/subscriptionRoutes.ts
-import { Router, Request, Response } from 'express';
+// src/modules/subscriptions/infrastructure/routes/SubscriptionRoutes.ts
+import { Router } from 'express';
 import { SubscriptionController } from '../controllers/SubscriptionController';
+import { WebhookController } from '../controllers/WebhookController';
+import { SubscriptionMiddleware } from '../middleware/SubscriptionMiddleware';
 import { AuthMiddleware } from '../../../../shared/middleware/AuthMiddleware';
-import rateLimit from 'express-rate-limit';
 
-const router = Router();
+export class SubscriptionRoutes {
+  private router: Router;
 
-// Inicialización lazy del controlador
-let subscriptionController: SubscriptionController | null = null;
-
-const getSubscriptionController = (): SubscriptionController => {
-  if (!subscriptionController) {
-    subscriptionController = new SubscriptionController();
+  constructor(
+    private subscriptionController: SubscriptionController,
+    private webhookController: WebhookController,
+    private subscriptionMiddleware: SubscriptionMiddleware,
+    private authMiddleware: AuthMiddleware
+  ) {
+    this.router = Router();
+    this.configureRoutes();
   }
-  return subscriptionController;
-};
 
-// Rate limiting
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100,
-  message: {
-    error: 'Demasiadas peticiones. Intenta de nuevo más tarde.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
+  private configureRoutes(): void {
+    // Rutas públicas (webhooks)
+    this.router.post(
+      '/webhook/stripe',
+      this.webhookController.handleStripeWebhook.bind(this.webhookController)
+    );
 
-const webhookLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minuto
-  max: 50, // Stripe puede enviar muchos webhooks
-  message: {
-    error: 'Demasiados webhooks. Intenta de nuevo más tarde.'
+    this.router.get(
+      '/webhook/status',
+      this.webhookController.getWebhookStatus.bind(this.webhookController)
+    );
+
+    // Rutas autenticadas
+    this.router.use(this.authMiddleware.requireAuth);
+
+    // Obtener suscripción actual del usuario
+    this.router.get(
+      '/current',
+      this.subscriptionController.getCurrentSubscription.bind(this.subscriptionController)
+    );
+
+    // Crear nueva suscripción
+    this.router.post(
+      '/',
+      this.subscriptionController.createSubscription.bind(this.subscriptionController)
+    );
+
+    // Actualizar suscripción (cambiar plan)
+    this.router.put(
+      '/:subscriptionId',
+      this.subscriptionController.updateSubscription.bind(this.subscriptionController)
+    );
+
+    // Cancelar suscripción
+    this.router.delete(
+      '/:subscriptionId',
+      this.subscriptionController.cancelSubscription.bind(this.subscriptionController)
+    );
+
+    // Obtener planes disponibles
+    this.router.get(
+      '/plans',
+      this.subscriptionController.getAvailablePlans.bind(this.subscriptionController)
+    );
+
+    // Crear sesión de checkout de Stripe
+    this.router.post(
+      '/checkout-session',
+      this.subscriptionController.createCheckoutSession.bind(this.subscriptionController)
+    );
+
+    // Obtener portal de facturación de Stripe
+    this.router.post(
+      '/billing-portal',
+      this.subscriptionMiddleware.requireActiveSubscription,
+      this.subscriptionController.createBillingPortalSession.bind(this.subscriptionController)
+    );
+
+    // Rutas administrativas (requieren permisos especiales)
+    this.router.get(
+      '/admin/stats',
+      this.authMiddleware.requireRole('admin'),
+      this.subscriptionController.getSubscriptionStats.bind(this.subscriptionController)
+    );
+
+    this.router.post(
+      '/admin/cleanup',
+      this.authMiddleware.requireRole('admin'),
+      this.subscriptionController.cleanupExpiredSubscriptions.bind(this.subscriptionController)
+    );
+
+    // Rutas para testing (solo en desarrollo)
+    if (process.env.NODE_ENV === 'development') {
+      this.router.post(
+        '/test/process-webhook',
+        this.authMiddleware.requireRole('admin'),
+        this.webhookController.handleStripeWebhook.bind(this.webhookController)
+      );
+    }
   }
-});
 
-// ============================================================================
-// RUTAS PÚBLICAS
-// ============================================================================
-
-// Obtener planes disponibles (público)
-router.get('/plans', 
-  generalLimiter,
-  (req: Request, res: Response) => getSubscriptionController().getAvailablePlans(req, res)
-);
-
-// Webhook de Stripe (público pero firmado)
-router.post('/webhook',
-  webhookLimiter,
-  (req: Request, res: Response) => getSubscriptionController().handleWebhook(req, res)
-);
-
-// ============================================================================
-// RUTAS PROTEGIDAS (requieren autenticación)
-// ============================================================================
-
-// Crear suscripción
-router.post('/',
-  generalLimiter,
-  AuthMiddleware.authenticate,
-  AuthMiddleware.checkUserStatus,
-  (req: Request, res: Response) => getSubscriptionController().createSubscription(req, res)
-);
-
-// Obtener suscripción actual
-router.get('/current',
-  generalLimiter,
-  AuthMiddleware.authenticate,
-  AuthMiddleware.checkUserStatus,
-  (req: Request, res: Response) => getSubscriptionController().getCurrentSubscription(req, res)
-);
-
-// Cancelar suscripción
-router.post('/cancel',
-  generalLimiter,
-  AuthMiddleware.authenticate,
-  AuthMiddleware.checkUserStatus,
-  (req: Request, res: Response) => getSubscriptionController().cancelSubscription(req, res)
-);
-
-// Cambiar plan
-router.put('/plan',
-  generalLimiter,
-  AuthMiddleware.authenticate,
-  AuthMiddleware.checkUserStatus,
-  (req: Request, res: Response) => getSubscriptionController().changePlan(req, res)
-);
-
-// Historial de facturación
-router.get('/billing-history',
-  generalLimiter,
-  AuthMiddleware.authenticate,
-  AuthMiddleware.checkUserStatus,
-  (req: Request, res: Response) => getSubscriptionController().getBillingHistory(req, res)
-);
-
-export { router as subscriptionRoutes };
+  public getRouter(): Router {
+    return this.router;
+  }
+}
