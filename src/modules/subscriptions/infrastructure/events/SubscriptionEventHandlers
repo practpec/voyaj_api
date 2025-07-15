@@ -1,6 +1,6 @@
 // src/modules/subscriptions/infrastructure/events/SubscriptionEventHandlers.ts
-import { EventHandler } from '../../../../shared/events/EventHandler';
-import { NotificationService } from '../services/NotificationService';
+import { EventBus } from '../../../../shared/events/EventBus';
+import { NotificationService } from '../services/NotificacitonService';
 import { IUserRepository } from '../../../users/domain/interfaces/IUserRepository';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import {
@@ -20,36 +20,37 @@ export class SubscriptionEventHandlers {
   ) {}
 
   // Configurar todos los manejadores de eventos
-  public registerHandlers(eventHandler: EventHandler): void {
-    eventHandler.on(
+  public registerHandlers(eventBus: EventBus): void {
+    eventBus.subscribe(
       SUBSCRIPTION_EVENT_TYPES.SUBSCRIPTION_CREATED,
       this.handleSubscriptionCreated.bind(this)
     );
 
-    eventHandler.on(
+    eventBus.subscribe(
       SUBSCRIPTION_EVENT_TYPES.SUBSCRIPTION_CANCELED,
       this.handleSubscriptionCanceled.bind(this)
     );
 
-    eventHandler.on(
+    eventBus.subscribe(
       SUBSCRIPTION_EVENT_TYPES.PAYMENT_SUCCEEDED,
       this.handlePaymentSucceeded.bind(this)
     );
 
-    eventHandler.on(
+    eventBus.subscribe(
       SUBSCRIPTION_EVENT_TYPES.PAYMENT_FAILED,
       this.handlePaymentFailed.bind(this)
     );
 
-    eventHandler.on(
+    eventBus.subscribe(
       SUBSCRIPTION_EVENT_TYPES.TRIAL_ENDING_SOON,
       this.handleTrialEndingSoon.bind(this)
     );
   }
 
   // Manejar creación de suscripción
-  private async handleSubscriptionCreated(data: SubscriptionCreatedEventData): Promise<void> {
+  private async handleSubscriptionCreated(event: any): Promise<void> {
     try {
+      const data = event.eventData as SubscriptionCreatedEventData;
       const user = await this.userRepository.findById(data.userId);
       
       if (!user) {
@@ -73,8 +74,9 @@ export class SubscriptionEventHandlers {
   }
 
   // Manejar cancelación de suscripción
-  private async handleSubscriptionCanceled(data: SubscriptionCanceledEventData): Promise<void> {
+  private async handleSubscriptionCanceled(event: any): Promise<void> {
     try {
+      const data = event.eventData as SubscriptionCanceledEventData;
       const user = await this.userRepository.findById(data.userId);
       
       if (!user) {
@@ -98,8 +100,9 @@ export class SubscriptionEventHandlers {
   }
 
   // Manejar pago exitoso
-  private async handlePaymentSucceeded(data: PaymentSucceededEventData): Promise<void> {
+  private async handlePaymentSucceeded(event: any): Promise<void> {
     try {
+      const data = event.eventData as PaymentSucceededEventData;
       const user = await this.userRepository.findById(data.userId);
       
       if (!user) {
@@ -107,8 +110,7 @@ export class SubscriptionEventHandlers {
         return;
       }
 
-      // Enviar confirmación de pago solo si es renovación (no primer pago)
-      // Se puede determinar por el invoiceId o agregar más lógica
+      // Enviar confirmación de pago
       await this.notificationService.sendPaymentSuccessNotification({
         userId: data.userId,
         email: user.email,
@@ -123,8 +125,9 @@ export class SubscriptionEventHandlers {
   }
 
   // Manejar pago fallido
-  private async handlePaymentFailed(data: PaymentFailedEventData): Promise<void> {
+  private async handlePaymentFailed(event: any): Promise<void> {
     try {
+      const data = event.eventData as PaymentFailedEventData;
       const user = await this.userRepository.findById(data.userId);
       
       if (!user) {
@@ -144,7 +147,6 @@ export class SubscriptionEventHandlers {
       // Si es el segundo intento fallido, realizar acciones adicionales
       if (data.attemptCount >= 2) {
         this.logger.warn(`Múltiples intentos de pago fallidos para: ${data.subscriptionId}`);
-        // Aquí podrías agregar lógica adicional como pausar la suscripción
       }
 
     } catch (error) {
@@ -153,8 +155,9 @@ export class SubscriptionEventHandlers {
   }
 
   // Manejar trial próximo a expirar
-  private async handleTrialEndingSoon(data: TrialEndingSoonEventData): Promise<void> {
+  private async handleTrialEndingSoon(event: any): Promise<void> {
     try {
+      const data = event.eventData as TrialEndingSoonEventData;
       const user = await this.userRepository.findById(data.userId);
       
       if (!user) {

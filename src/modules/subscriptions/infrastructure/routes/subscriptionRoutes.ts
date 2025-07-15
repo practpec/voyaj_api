@@ -1,105 +1,103 @@
-// src/modules/subscriptions/infrastructure/routes/SubscriptionRoutes.ts
+// src/modules/subscriptions/infrastructure/routes/subscriptionRoutes.ts
 import { Router } from 'express';
 import { SubscriptionController } from '../controllers/SubscriptionController';
-import { WebhookController } from '../controllers/WebhookController';
-import { SubscriptionMiddleware } from '../middleware/SubscriptionMiddleware';
 import { AuthMiddleware } from '../../../../shared/middleware/AuthMiddleware';
+import rateLimit from 'express-rate-limit';
 
-export class SubscriptionRoutes {
-  private router: Router;
+const router = Router();
 
-  constructor(
-    private subscriptionController: SubscriptionController,
-    private webhookController: WebhookController,
-    private subscriptionMiddleware: SubscriptionMiddleware,
-    private authMiddleware: AuthMiddleware
-  ) {
-    this.router = Router();
-    this.configureRoutes();
+// Inicialización lazy del controlador
+let subscriptionController: SubscriptionController | null = null;
+
+const getSubscriptionController = (): SubscriptionController => {
+  if (!subscriptionController) {
+    subscriptionController = new SubscriptionController();
   }
+  return subscriptionController;
+};
 
-  private configureRoutes(): void {
-    // Rutas públicas (webhooks)
-    this.router.post(
-      '/webhook/stripe',
-      this.webhookController.handleStripeWebhook.bind(this.webhookController)
-    );
+// Rate limiting específico
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100,
+  message: {
+    error: 'Demasiadas peticiones. Intenta de nuevo más tarde.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
-    this.router.get(
-      '/webhook/status',
-      this.webhookController.getWebhookStatus.bind(this.webhookController)
-    );
+// ============================================================================
+// RUTAS PÚBLICAS (webhooks)
+// ============================================================================
 
-    // Rutas autenticadas
-    this.router.use(this.authMiddleware.requireAuth);
+// Webhook de Stripe
+router.post('/webhook/stripe',
+  (req, res) => getSubscriptionController().handleWebhook(req, res)
+);
 
-    // Obtener suscripción actual del usuario
-    this.router.get(
-      '/current',
-      this.subscriptionController.getCurrentSubscription.bind(this.subscriptionController)
-    );
+// ============================================================================
+// RUTAS PROTEGIDAS (requieren autenticación)
+// ============================================================================
 
-    // Crear nueva suscripción
-    this.router.post(
-      '/',
-      this.subscriptionController.createSubscription.bind(this.subscriptionController)
-    );
+// Middleware de autenticación para todas las rutas siguientes
+router.use(generalLimiter);
+router.use(AuthMiddleware.authenticate);
 
-    // Actualizar suscripción (cambiar plan)
-    this.router.put(
-      '/:subscriptionId',
-      this.subscriptionController.updateSubscription.bind(this.subscriptionController)
-    );
+// Obtener suscripción actual del usuario
+router.get('/current',
+  (req, res) => getSubscriptionController().getCurrentSubscription(req, res)
+);
 
-    // Cancelar suscripción
-    this.router.delete(
-      '/:subscriptionId',
-      this.subscriptionController.cancelSubscription.bind(this.subscriptionController)
-    );
+// Crear nueva suscripción
+router.post('/',
+  (req, res) => getSubscriptionController().createSubscription(req, res)
+);
 
-    // Obtener planes disponibles
-    this.router.get(
-      '/plans',
-      this.subscriptionController.getAvailablePlans.bind(this.subscriptionController)
-    );
+// Actualizar suscripción (cambiar plan)
+router.put('/:id',
+  (req, res) => getSubscriptionController().updateSubscription(req, res)
+);
 
-    // Crear sesión de checkout de Stripe
-    this.router.post(
-      '/checkout-session',
-      this.subscriptionController.createCheckoutSession.bind(this.subscriptionController)
-    );
+// Cancelar suscripción
+router.post('/cancel',
+  (req, res) => getSubscriptionController().cancelSubscription(req, res)
+);
 
-    // Obtener portal de facturación de Stripe
-    this.router.post(
-      '/billing-portal',
-      this.subscriptionMiddleware.requireActiveSubscription,
-      this.subscriptionController.createBillingPortalSession.bind(this.subscriptionController)
-    );
+// Obtener planes disponibles
+router.get('/plans',
+  (req, res) => getSubscriptionController().getAvailablePlans(req, res)
+);
 
-    // Rutas administrativas (requieren permisos especiales)
-    this.router.get(
-      '/admin/stats',
-      this.authMiddleware.requireRole('admin'),
-      this.subscriptionController.getSubscriptionStats.bind(this.subscriptionController)
-    );
+// Crear sesión de checkout de Stripe
+router.post('/checkout-session',
+  (req, res) => getSubscriptionController().createCheckoutSession(req, res)
+);
 
-    this.router.post(
-      '/admin/cleanup',
-      this.authMiddleware.requireRole('admin'),
-      this.subscriptionController.cleanupExpiredSubscriptions.bind(this.subscriptionController)
-    );
+// Obtener portal de facturación de Stripe
+router.post('/billing-portal',
+  (req, res) => getSubscriptionController().createBillingPortalSession(req, res)
+);
 
-    // Rutas para testing (solo en desarrollo)
-    if (process.env.NODE_ENV === 'development') {
-      this.router.post(
-        '/test/process-webhook',
-        this.authMiddleware.requireRole('admin'),
-        this.webhookController.handleStripeWebhook.bind(this.webhookController)
-      );
-    }
-  }
+// Obtener historial de facturación
+router.get('/billing-history',
+  (req, res) => getSubscriptionController().getBillingHistory(req, res)
+);
 
-  public getRouter(): Router {
-    return this.router;
-  }
-}
+// ============================================================================
+// RUTAS ADMINISTRATIVAS (requieren rol admin)
+// ============================================================================
+
+// Estadísticas de suscripciones (solo admin)
+router.get('/admin/stats',
+  AuthMiddleware.requireAdmin,
+  (req, res) => getSubscriptionController().getSubscriptionStats(req, res)
+);
+
+// Limpiar suscripciones expiradas (solo admin)
+router.post('/admin/cleanup',
+  AuthMiddleware.requireAdmin,
+  (req, res) => getSubscriptionController().cleanupExpiredSubscriptions(req, res)
+);
+
+export { router as subscriptionRoutes };

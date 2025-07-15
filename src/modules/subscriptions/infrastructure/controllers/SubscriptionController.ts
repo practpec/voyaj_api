@@ -9,6 +9,7 @@ import { CreateSubscriptionUseCase } from '../../application/useCases/CreateSubs
 import { CancelSubscriptionUseCase } from '../../application/useCases/CancelSubscription';
 import { GetSubscriptionUseCase } from '../../application/useCases/GetSubscription';
 import { ProcessWebhookUseCase } from '../../application/useCases/ProcessWebhook';
+import { GetAvailablePlansUseCase } from '../../application/useCases/GetAvailablePlans';
 
 // Services & Repository
 import { StripeService } from '../services/StripeService';
@@ -26,6 +27,7 @@ export class SubscriptionController {
   private cancelSubscriptionUseCase: CancelSubscriptionUseCase;
   private getSubscriptionUseCase: GetSubscriptionUseCase;
   private processWebhookUseCase: ProcessWebhookUseCase;
+  private getAvailablePlansUseCase: GetAvailablePlansUseCase;
 
   constructor() {
     this.logger = LoggerService.getInstance();
@@ -58,6 +60,8 @@ export class SubscriptionController {
       this.stripeService,
       this.logger
     );
+
+    this.getAvailablePlansUseCase = new GetAvailablePlansUseCase(this.logger);
   }
 
   // POST /api/subscriptions
@@ -110,36 +114,8 @@ export class SubscriptionController {
     }
   };
 
-  // POST /api/subscriptions/cancel
-  public cancelSubscription = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const userId = req.user!.userId;
-      const { cancelImmediately = false } = req.body;
-
-      await this.cancelSubscriptionUseCase.execute({
-        userId,
-        cancelImmediately
-      });
-
-      ResponseUtils.success(
-        res, 
-        undefined, 
-        cancelImmediately ? 'Suscripción cancelada inmediatamente' : 'Suscripción programada para cancelar'
-      );
-    } catch (error) {
-      const errorResponse = ErrorHandler.handleError(error as Error);
-      ResponseUtils.error(
-        res,
-        errorResponse.statusCode,
-        errorResponse.errorCode,
-        errorResponse.message,
-        errorResponse.details
-      );
-    }
-  };
-
-  // PUT /api/subscriptions/plan
-  public changePlan = async (req: Request, res: Response): Promise<void> => {
+  // PUT /api/subscriptions/:id
+  public updateSubscription = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
       const { newPlan } = req.body;
@@ -180,7 +156,8 @@ export class SubscriptionController {
         return;
       }
 
-      const planConfig = require('../../../../shared/constants/paymentConstants').PLAN_LIMITS[newPlan];
+      const { PLAN_LIMITS } = require('../../../../shared/constants/paymentConstants');
+      const planConfig = PLAN_LIMITS[newPlan];
       
       await this.stripeService.changePlan(subscription.stripeSubscriptionId, planConfig.priceId);
 
@@ -201,52 +178,137 @@ export class SubscriptionController {
     }
   };
 
-  // POST /api/subscriptions/webhook
-  public handleWebhook = async (req: Request, res: Response): Promise<void> => {
+  // POST /api/subscriptions/cancel
+  public cancelSubscription = async (req: Request, res: Response): Promise<void> => {
     try {
-      const signature = req.headers['stripe-signature'] as string;
-      const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+      const userId = req.user!.userId;
+      const { cancelImmediately = false } = req.body;
 
-      if (!signature || !endpointSecret) {
-        ResponseUtils.error(res, 400, 'INVALID_WEBHOOK', 'Webhook signature missing');
+      await this.cancelSubscriptionUseCase.execute({
+        userId,
+        cancelImmediately
+      });
+
+      ResponseUtils.success(
+        res, 
+        undefined, 
+        cancelImmediately ? 'Suscripción cancelada inmediatamente' : 'Suscripción programada para cancelar'
+      );
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // POST /api/subscriptions/checkout-session
+  public createCheckoutSession = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.userId;
+      const { plan, successUrl, cancelUrl } = req.body;
+
+      // Obtener usuario
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        ResponseUtils.error(res, 404, 'USER_NOT_FOUND', 'Usuario no encontrado');
         return;
       }
 
-      const payload = JSON.stringify(req.body);
+      // Crear customer en Stripe
+      const customer = await this.stripeService.createOrGetCustomer(
+        userId,
+        user.email,
+        user.name
+      );
 
-      await this.processWebhookUseCase.execute({
-        payload,
-        signature,
-        endpointSecret
+      // Obtener configuración del plan
+      const { PLAN_LIMITS } = require('../../../../shared/constants/paymentConstants');
+      const planConfig = PLAN_LIMITS[plan];
+
+      if (!planConfig || !planConfig.priceId) {
+        ResponseUtils.error(res, 400, 'INVALID_PLAN', 'Plan no válido');
+        return;
+      }
+
+      // Crear sesión de checkout con Stripe
+      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      const session = await stripe.checkout.sessions.create({
+        customer: customer.id,
+        payment_method_types: ['card'],
+        line_items: [{
+          price: planConfig.priceId,
+          quantity: 1
+        }],
+        mode: 'subscription',
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+          userId,
+          plan
+        }
       });
 
-      ResponseUtils.success(res, { received: true }, 'Webhook procesado exitosamente');
+      ResponseUtils.success(res, {
+        sessionId: session.id,
+        sessionUrl: session.url,
+        publicKey: process.env.STRIPE_PUBLISHABLE_KEY
+      }, 'Sesión de checkout creada exitosamente');
+
     } catch (error) {
-      this.logger.error('Error procesando webhook:', error);
-      ResponseUtils.error(res, 400, 'WEBHOOK_ERROR', 'Error procesando webhook');
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // POST /api/subscriptions/billing-portal
+  public createBillingPortalSession = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.userId;
+      const { returnUrl } = req.body;
+
+      const subscription = await this.subscriptionRepository.findActiveByUserId(userId);
+      if (!subscription || !subscription.stripeCustomerId) {
+        ResponseUtils.error(res, 400, 'NO_CUSTOMER', 'No se encontró información de facturación');
+        return;
+      }
+
+      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      const session = await stripe.billingPortal.sessions.create({
+        customer: subscription.stripeCustomerId,
+        return_url: returnUrl
+      });
+
+      ResponseUtils.success(res, {
+        portalUrl: session.url
+      }, 'Sesión de portal de facturación creada exitosamente');
+
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
     }
   };
 
   // GET /api/subscriptions/plans
   public getAvailablePlans = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { PLAN_LIMITS } = require('../../../../shared/constants/paymentConstants');
-      
-      const plans = Object.entries(PLAN_LIMITS).map(([key, config]: [string, any]) => ({
-        id: key,
-        name: this.getPlanDisplayName(key),
-        price: config.price,
-        currency: config.currency,
-        features: {
-          activeTrips: config.activeTrips === -1 ? 'Ilimitados' : config.activeTrips,
-          photosPerTrip: config.photosPerTrip === -1 ? 'Ilimitadas' : config.photosPerTrip,
-          groupTripParticipants: config.groupTripParticipants === -1 ? 'Ilimitados' : 
-            config.groupTripParticipants === 0 ? 'No disponible' : config.groupTripParticipants,
-          exportFormats: config.exportFormats,
-          offlineMode: config.offlineMode
-        }
-      }));
-
+      const plans = await this.getAvailablePlansUseCase.execute();
       ResponseUtils.success(res, { plans }, 'Planes disponibles');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
@@ -296,12 +358,94 @@ export class SubscriptionController {
     }
   };
 
-  private getPlanDisplayName(planKey: string): string {
-    const names: Record<string, string> = {
-      explorador: 'Explorador',
-      aventurero: 'Aventurero',
-      nomada: 'Nómada Digital'
-    };
-    return names[planKey] || planKey;
-  }
+  // GET /api/subscriptions/admin/stats
+  public getSubscriptionStats = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const [totalActive, totalCanceled, explorerCount, adventurerCount, nomadCount] = 
+        await Promise.all([
+          this.subscriptionRepository.countActiveSubscriptions(),
+          this.subscriptionRepository.countCanceledSubscriptions(),
+          this.subscriptionRepository.countSubscriptionsByPlan('explorador'),
+          this.subscriptionRepository.countSubscriptionsByPlan('aventurero'),
+          this.subscriptionRepository.countSubscriptionsByPlan('nomada')
+        ]);
+
+      const stats = {
+        totalActive,
+        totalCanceled,
+        byPlan: {
+          'explorador': explorerCount,
+          'aventurero': adventurerCount,
+          'nomada': nomadCount
+        },
+        growth: {
+          thisMonth: 0, // Implementar lógica de crecimiento
+          lastMonth: 0,
+          percentageChange: 0
+        },
+        revenue: {
+          monthly: 0, // Implementar cálculo de ingresos
+          yearly: 0,
+          currency: 'MXN'
+        }
+      };
+
+      ResponseUtils.success(res, stats, 'Estadísticas obtenidas exitosamente');
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // POST /api/subscriptions/admin/cleanup
+  public cleanupExpiredSubscriptions = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const cleaned = await this.subscriptionRepository.cleanupExpiredSubscriptions();
+      
+      ResponseUtils.success(res, { 
+        cleaned 
+      }, `${cleaned} suscripciones expiradas eliminadas`);
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // POST /api/subscriptions/webhook
+  public handleWebhook = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const signature = req.headers['stripe-signature'] as string;
+      const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+
+      if (!signature || !endpointSecret) {
+        ResponseUtils.error(res, 400, 'INVALID_WEBHOOK', 'Webhook signature missing');
+        return;
+      }
+
+      const payload = JSON.stringify(req.body);
+
+      await this.processWebhookUseCase.execute({
+        payload,
+        signature,
+        endpointSecret
+      });
+
+      ResponseUtils.success(res, { received: true }, 'Webhook procesado exitosamente');
+    } catch (error) {
+      this.logger.error('Error procesando webhook:', error);
+      ResponseUtils.error(res, 400, 'WEBHOOK_ERROR', 'Error procesando webhook');
+    }
+  };
 }

@@ -2,6 +2,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { GetSubscriptionUseCase } from '../../application/useCases/GetSubscription';
 import { LoggerService } from '../../../../shared/services/LoggerService';
+import { SubscriptionMongoRepository } from '../repositories/SubscriptionMongoRepository';
+import { ResponseUtils } from '../../../../shared/utils/ResponseUtils';
 
 // Extender Request para incluir información de suscripción
 declare global {
@@ -25,36 +27,39 @@ declare global {
 }
 
 export class SubscriptionMiddleware {
-  constructor(
-    private getSubscriptionUseCase: GetSubscriptionUseCase,
-    private logger: LoggerService
-  ) {}
+  private static getSubscriptionUseCase: GetSubscriptionUseCase;
+  private static logger = LoggerService.getInstance();
+
+  // Inicializar servicios de forma estática
+  private static initializeServices(): void {
+    if (!this.getSubscriptionUseCase) {
+      const subscriptionRepository = new SubscriptionMongoRepository();
+      this.getSubscriptionUseCase = new GetSubscriptionUseCase(
+        subscriptionRepository,
+        this.logger
+      );
+    }
+  }
 
   // Middleware para verificar suscripción activa
-  public requireActiveSubscription = async (
+  public static requireActiveSubscription = async (
     req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
-        res.status(401).json({
-          success: false,
-          message: 'Usuario no autenticado'
-        });
+        ResponseUtils.unauthorized(res, 'Usuario no autenticado');
         return;
       }
 
+      this.initializeServices();
       const subscription = await this.getSubscriptionUseCase.execute(userId);
 
       if (!subscription || !subscription.isActive) {
-        res.status(403).json({
-          success: false,
-          message: 'Suscripción activa requerida',
-          code: 'SUBSCRIPTION_REQUIRED'
-        });
+        ResponseUtils.forbidden(res, 'Suscripción activa requerida');
         return;
       }
 
@@ -70,34 +75,26 @@ export class SubscriptionMiddleware {
       next();
     } catch (error) {
       this.logger.error('Error verificando suscripción:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error interno del servidor'
-      });
+      ResponseUtils.internalServerError(res);
     }
   };
 
   // Middleware para verificar plan específico
-  public requirePlan = (requiredPlan: string) => {
+  public static requirePlan = (requiredPlan: string) => {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
-        const userId = req.user?.id;
+        const userId = req.user?.userId;
 
         if (!userId) {
-          res.status(401).json({
-            success: false,
-            message: 'Usuario no autenticado'
-          });
+          ResponseUtils.unauthorized(res, 'Usuario no autenticado');
           return;
         }
 
+        this.initializeServices();
         const subscription = await this.getSubscriptionUseCase.execute(userId);
 
         if (!subscription || subscription.plan !== requiredPlan) {
-          res.status(403).json({
-            success: false,
-            message: `Plan ${requiredPlan} requerido`,
-            code: 'PLAN_REQUIRED',
+          ResponseUtils.error(res, 403, 'PLAN_REQUIRED', `Plan ${requiredPlan} requerido`, {
             currentPlan: subscription?.plan || 'NONE'
           });
           return;
@@ -114,36 +111,27 @@ export class SubscriptionMiddleware {
         next();
       } catch (error) {
         this.logger.error('Error verificando plan:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Error interno del servidor'
-        });
+        ResponseUtils.internalServerError(res);
       }
     };
   };
 
   // Middleware para verificar funcionalidad específica
-  public requireFeature = (feature: 'groupTrips' | 'offlineMode' | 'exportFormats') => {
+  public static requireFeature = (feature: 'groupTrips' | 'offlineMode' | 'exportFormats') => {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
-        const userId = req.user?.id;
+        const userId = req.user?.userId;
 
         if (!userId) {
-          res.status(401).json({
-            success: false,
-            message: 'Usuario no autenticado'
-          });
+          ResponseUtils.unauthorized(res, 'Usuario no autenticado');
           return;
         }
 
+        this.initializeServices();
         const subscription = await this.getSubscriptionUseCase.execute(userId);
 
         if (!subscription || !subscription.isActive) {
-          res.status(403).json({
-            success: false,
-            message: 'Suscripción activa requerida',
-            code: 'SUBSCRIPTION_REQUIRED'
-          });
+          ResponseUtils.forbidden(res, 'Suscripción activa requerida');
           return;
         }
 
@@ -151,10 +139,8 @@ export class SubscriptionMiddleware {
         const hasFeature = this.checkFeatureAccess(subscription, feature);
 
         if (!hasFeature) {
-          res.status(403).json({
-            success: false,
-            message: `Funcionalidad ${feature} no disponible en tu plan`,
-            code: 'FEATURE_NOT_AVAILABLE',
+          ResponseUtils.error(res, 403, 'FEATURE_NOT_AVAILABLE', 
+            `Funcionalidad ${feature} no disponible en tu plan`, {
             currentPlan: subscription.plan
           });
           return;
@@ -171,24 +157,22 @@ export class SubscriptionMiddleware {
         next();
       } catch (error) {
         this.logger.error('Error verificando funcionalidad:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Error interno del servidor'
-        });
+        ResponseUtils.internalServerError(res);
       }
     };
   };
 
   // Middleware para agregar información de suscripción (opcional)
-  public addSubscriptionInfo = async (
+  public static addSubscriptionInfo = async (
     req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (userId) {
+        this.initializeServices();
         const subscription = await this.getSubscriptionUseCase.execute(userId);
 
         if (subscription) {
@@ -210,7 +194,7 @@ export class SubscriptionMiddleware {
     }
   };
 
-  private checkFeatureAccess(subscription: any, feature: string): boolean {
+  private static checkFeatureAccess(subscription: any, feature: string): boolean {
     switch (feature) {
       case 'groupTrips':
         return subscription.planLimits.groupTripParticipants > 0;
