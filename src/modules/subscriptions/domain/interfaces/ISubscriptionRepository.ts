@@ -16,11 +16,11 @@ export interface ISubscriptionRepository {
   // Consultas de estado
   findExpiredSubscriptions(): Promise<Subscription[]>;
   findSubscriptionsEndingInDays(days: number): Promise<Subscription[]>;
-  findActiveSubscriptionsByPlan(plan: string): Promise<Subscription[]>;
+  findActiveSubscriptionsByPlan(planId: string): Promise<Subscription[]>;
 
   // Estadísticas
   countActiveSubscriptions(): Promise<number>;
-  countSubscriptionsByPlan(plan: string): Promise<number>;
+  countSubscriptionsByPlan(planId: string): Promise<number>;
   countCanceledSubscriptions(): Promise<number>;
 
   // Operaciones de limpieza

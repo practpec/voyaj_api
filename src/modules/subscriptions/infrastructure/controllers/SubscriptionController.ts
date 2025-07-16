@@ -1,83 +1,106 @@
-// src/modules/subscriptions/infrastructure/controllers/SubscriptionController.ts - Updated
+// src/modules/subscriptions/infrastructure/controllers/SubscriptionController.ts
 import { Request, Response } from 'express';
 import { ResponseUtils } from '../../../../shared/utils/ResponseUtils';
 import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
 import { LoggerService } from '../../../../shared/services/LoggerService';
+import { BaseController } from '../../../../shared/controllers/BaseController';
 
 // Use Cases
 import { CreateSubscriptionUseCase } from '../../application/useCases/CreateSubscription';
+import { UpdateSubscriptionUseCase } from '../../application/useCases/UpdateSubscription';
 import { CancelSubscriptionUseCase } from '../../application/useCases/CancelSubscription';
 import { GetSubscriptionUseCase } from '../../application/useCases/GetSubscription';
-import { ProcessWebhookUseCase } from '../../application/useCases/ProcessWebhook';
 import { GetAvailablePlansUseCase } from '../../application/useCases/GetAvailablePlans';
+import { ValidateFeatureAccessUseCase } from '../../application/useCases/ValidateFeatureAccess';
 
-// Services & Repository
-import { StripeService } from '../services/StripeService';
+// Services & Repositories
 import { SubscriptionMongoRepository } from '../repositories/SubscriptionMongoRepository';
+import { PlanMongoRepository } from '../repositories/PlanMongoRepository';
 import { UserMongoRepository } from '../../../users/infrastructure/repositories/UserMongoRepository';
-import { PLAN_LIMITS } from '../../../../shared/constants/paymentConstants';
+import { StripeService } from '../services/StripeService';
+import { EventBus } from '../../../../shared/events/EventBus';
 
-export class SubscriptionController {
-  private logger: LoggerService;
-  private stripeService: StripeService;
+export class SubscriptionController extends BaseController {
   private subscriptionRepository: SubscriptionMongoRepository;
+  private planRepository: PlanMongoRepository;
   private userRepository: UserMongoRepository;
+  private stripeService: StripeService;
+  private eventBus: EventBus;
 
   // Use Cases
   private createSubscriptionUseCase: CreateSubscriptionUseCase;
+  private updateSubscriptionUseCase: UpdateSubscriptionUseCase;
   private cancelSubscriptionUseCase: CancelSubscriptionUseCase;
   private getSubscriptionUseCase: GetSubscriptionUseCase;
-  private processWebhookUseCase: ProcessWebhookUseCase;
   private getAvailablePlansUseCase: GetAvailablePlansUseCase;
+  private validateFeatureAccessUseCase: ValidateFeatureAccessUseCase;
 
   constructor() {
-    this.logger = LoggerService.getInstance();
-    this.stripeService = StripeService.getInstance();
+    const logger = LoggerService.getInstance();
+    super(logger);
+
     this.subscriptionRepository = new SubscriptionMongoRepository();
+    this.planRepository = new PlanMongoRepository();
     this.userRepository = new UserMongoRepository();
+    this.stripeService = StripeService.getInstance();
+    this.eventBus = EventBus.getInstance();
 
     // Inicializar casos de uso
     this.createSubscriptionUseCase = new CreateSubscriptionUseCase(
       this.subscriptionRepository,
+      this.planRepository,
       this.userRepository,
       this.stripeService,
+      this.eventBus,
+      this.logger
+    );
+
+    this.updateSubscriptionUseCase = new UpdateSubscriptionUseCase(
+      this.subscriptionRepository,
+      this.planRepository,
+      this.stripeService,
+      this.eventBus,
       this.logger
     );
 
     this.cancelSubscriptionUseCase = new CancelSubscriptionUseCase(
       this.subscriptionRepository,
       this.stripeService,
+      this.eventBus,
       this.logger
     );
 
     this.getSubscriptionUseCase = new GetSubscriptionUseCase(
       this.subscriptionRepository,
+      this.planRepository,
       this.logger
     );
 
-    this.processWebhookUseCase = new ProcessWebhookUseCase(
+    this.getAvailablePlansUseCase = new GetAvailablePlansUseCase(
+      this.planRepository,
+      this.logger
+    );
+
+    this.validateFeatureAccessUseCase = new ValidateFeatureAccessUseCase(
       this.subscriptionRepository,
-      this.userRepository,
-      this.stripeService,
+      this.planRepository,
       this.logger
     );
-
-    this.getAvailablePlansUseCase = new GetAvailablePlansUseCase(this.logger);
   }
 
   // POST /api/subscriptions
   public createSubscription = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      const { plan, trialDays } = req.body;
+      const { planCode, trialDays } = req.body;
 
       const result = await this.createSubscriptionUseCase.execute({
         userId,
-        plan,
+        planCode,
         trialDays
       });
 
-      ResponseUtils.created(res, result, 'Suscripción creada exitosamente');
+      this.created(res, result, 'Suscripción creada exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
       ResponseUtils.error(
@@ -98,11 +121,11 @@ export class SubscriptionController {
       const subscription = await this.getSubscriptionUseCase.execute(userId);
 
       if (!subscription) {
-        ResponseUtils.notFound(res, 'No tienes una suscripción activa');
+        this.notFound(res, 'No tienes una suscripción activa');
         return;
       }
 
-      ResponseUtils.success(res, subscription, 'Suscripción obtenida exitosamente');
+      this.ok(res, subscription, 'Suscripción obtenida exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
       ResponseUtils.error(
@@ -119,53 +142,16 @@ export class SubscriptionController {
   public updateSubscription = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      const { newPlan } = req.body;
+      const subscriptionId = req.params.id;
+      const { newPlanCode } = req.body;
 
-      // Obtener suscripción actual
-      const subscription = await this.subscriptionRepository.findActiveByUserId(userId);
-      if (!subscription) {
-        ResponseUtils.notFound(res, 'No tienes una suscripción activa');
-        return;
-      }
+      await this.updateSubscriptionUseCase.execute({
+        subscriptionId,
+        newPlanCode,
+        userId
+      });
 
-      // Validar que el plan sea diferente
-      if (subscription.plan === newPlan) {
-        ResponseUtils.error(res, 400, 'SAME_PLAN', 'Ya tienes este plan activo');
-        return;
-      }
-
-      // Si es cambio a plan gratuito, cancelar suscripción
-      if (newPlan === 'EXPLORADOR') {
-        await this.cancelSubscriptionUseCase.execute({
-          userId,
-          cancelImmediately: true
-        });
-
-        // Crear nueva suscripción gratuita
-        const result = await this.createSubscriptionUseCase.execute({
-          userId,
-          plan: newPlan
-        });
-
-        ResponseUtils.success(res, result, 'Plan cambiado a Explorador exitosamente');
-        return;
-      }
-
-      // Para planes pagos, usar Stripe
-      if (!subscription.stripeSubscriptionId) {
-        ResponseUtils.error(res, 400, 'INVALID_SUBSCRIPTION', 'Suscripción sin Stripe ID');
-        return;
-      }
-
-      const planConfig = PLAN_LIMITS[newPlan as keyof typeof PLAN_LIMITS];
-      
-      await this.stripeService.changePlan(subscription.stripeSubscriptionId, planConfig.priceId);
-
-      // Actualizar plan en nuestra BD
-      subscription.changePlan(newPlan, planConfig.priceId);
-      await this.subscriptionRepository.update(subscription);
-
-      ResponseUtils.success(res, undefined, 'Plan cambiado exitosamente');
+      this.ok(res, undefined, 'Plan cambiado exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
       ResponseUtils.error(
@@ -182,18 +168,60 @@ export class SubscriptionController {
   public cancelSubscription = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      const { cancelImmediately = false } = req.body;
+      const { cancelImmediately = false, reason } = req.body;
 
       await this.cancelSubscriptionUseCase.execute({
         userId,
-        cancelImmediately
+        cancelImmediately,
+        reason
       });
 
-      ResponseUtils.success(
-        res, 
-        undefined, 
-        cancelImmediately ? 'Suscripción cancelada inmediatamente' : 'Suscripción programada para cancelar'
+      const message = cancelImmediately 
+        ? 'Suscripción cancelada inmediatamente' 
+        : 'Suscripción programada para cancelar';
+
+      this.ok(res, undefined, message);
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
       );
+    }
+  };
+
+  // GET /api/subscriptions/plans
+  public getAvailablePlans = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const plans = await this.getAvailablePlansUseCase.execute();
+      this.ok(res, { plans }, 'Planes disponibles');
+    } catch (error) {
+      const errorResponse = ErrorHandler.handleError(error as Error);
+      ResponseUtils.error(
+        res,
+        errorResponse.statusCode,
+        errorResponse.errorCode,
+        errorResponse.message,
+        errorResponse.details
+      );
+    }
+  };
+
+  // GET /api/subscriptions/feature-access
+  public validateFeatureAccess = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.userId;
+      const { feature } = req.query;
+
+      const access = await this.validateFeatureAccessUseCase.execute({
+        userId,
+        feature: feature as string
+      });
+
+      this.ok(res, access, 'Validación de acceso completada');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
       ResponseUtils.error(
@@ -210,37 +238,37 @@ export class SubscriptionController {
   public createCheckoutSession = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      const { plan, successUrl, cancelUrl } = req.body;
+      const { planCode, successUrl, cancelUrl } = req.body;
 
-      // Obtener usuario
       const user = await this.userRepository.findById(userId);
       if (!user) {
-        ResponseUtils.error(res, 404, 'USER_NOT_FOUND', 'Usuario no encontrado');
+        this.notFound(res, 'Usuario no encontrado');
         return;
       }
 
-      // Crear customer en Stripe
+      const plan = await this.planRepository.findByCode(planCode);
+      if (!plan) {
+        this.notFound(res, 'Plan no encontrado');
+        return;
+      }
+
+      if (plan.isFree) {
+        this.badRequest(res, 'El plan gratuito no requiere checkout');
+        return;
+      }
+
       const customer = await this.stripeService.createOrGetCustomer(
         userId,
         user.email,
         user.name
       );
 
-      // Obtener configuración del plan
-      const planConfig = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS];
-
-      if (!planConfig || !planConfig.priceId) {
-        ResponseUtils.error(res, 400, 'INVALID_PLAN', 'Plan no válido');
-        return;
-      }
-
-      // Crear sesión de checkout con Stripe
       const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
       const session = await stripe.checkout.sessions.create({
         customer: customer.id,
         payment_method_types: ['card'],
         line_items: [{
-          price: planConfig.priceId,
+          price: plan.stripePriceIdMonthly,
           quantity: 1
         }],
         mode: 'subscription',
@@ -248,11 +276,11 @@ export class SubscriptionController {
         cancel_url: cancelUrl,
         metadata: {
           userId,
-          plan
+          planCode
         }
       });
 
-      ResponseUtils.success(res, {
+      this.ok(res, {
         sessionId: session.id,
         sessionUrl: session.url,
         publicKey: process.env.STRIPE_PUBLISHABLE_KEY
@@ -278,7 +306,7 @@ export class SubscriptionController {
 
       const subscription = await this.subscriptionRepository.findActiveByUserId(userId);
       if (!subscription || !subscription.stripeCustomerId) {
-        ResponseUtils.error(res, 400, 'NO_CUSTOMER', 'No se encontró información de facturación');
+        this.badRequest(res, 'No se encontró información de facturación');
         return;
       }
 
@@ -288,27 +316,10 @@ export class SubscriptionController {
         return_url: returnUrl
       });
 
-      ResponseUtils.success(res, {
+      this.ok(res, {
         portalUrl: session.url
       }, 'Sesión de portal de facturación creada exitosamente');
 
-    } catch (error) {
-      const errorResponse = ErrorHandler.handleError(error as Error);
-      ResponseUtils.error(
-        res,
-        errorResponse.statusCode,
-        errorResponse.errorCode,
-        errorResponse.message,
-        errorResponse.details
-      );
-    }
-  };
-
-  // GET /api/subscriptions/plans
-  public getAvailablePlans = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const plans = await this.getAvailablePlansUseCase.execute();
-      ResponseUtils.success(res, { plans }, 'Planes disponibles');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
       ResponseUtils.error(
@@ -328,7 +339,7 @@ export class SubscriptionController {
 
       const subscription = await this.subscriptionRepository.findActiveByUserId(userId);
       if (!subscription || !subscription.stripeCustomerId) {
-        ResponseUtils.success(res, { invoices: [] }, 'Historial de facturación');
+        this.ok(res, { invoices: [] }, 'Historial de facturación');
         return;
       }
 
@@ -344,7 +355,7 @@ export class SubscriptionController {
         pdfUrl: invoice.hosted_invoice_url
       }));
 
-      ResponseUtils.success(res, { invoices: billingHistory }, 'Historial de facturación');
+      this.ok(res, { invoices: billingHistory }, 'Historial de facturación');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
       ResponseUtils.error(
@@ -360,36 +371,35 @@ export class SubscriptionController {
   // GET /api/subscriptions/admin/stats
   public getSubscriptionStats = async (req: Request, res: Response): Promise<void> => {
     try {
-      const [totalActive, totalCanceled, explorerCount, adventurerCount, nomadCount] = 
-        await Promise.all([
-          this.subscriptionRepository.countActiveSubscriptions(),
-          this.subscriptionRepository.countCanceledSubscriptions(),
-          this.subscriptionRepository.countSubscriptionsByPlan('EXPLORADOR'),
-          this.subscriptionRepository.countSubscriptionsByPlan('AVENTURERO'),
-          this.subscriptionRepository.countSubscriptionsByPlan('NOMADA')
-        ]);
+      const [totalActive, totalCanceled, activePlans] = await Promise.all([
+        this.subscriptionRepository.countActiveSubscriptions(),
+        this.subscriptionRepository.countCanceledSubscriptions(),
+        this.planRepository.findActivePlans()
+      ]);
+
+      const byPlan: Record<string, number> = {};
+      
+      for (const plan of activePlans) {
+        byPlan[plan.code] = await this.subscriptionRepository.countSubscriptionsByPlan(plan.id);
+      }
 
       const stats = {
         totalActive,
         totalCanceled,
-        byPlan: {
-          'EXPLORADOR': explorerCount,
-          'AVENTURERO': adventurerCount,
-          'NOMADA': nomadCount
-        },
+        byPlan,
         growth: {
-          thisMonth: 0, // Implementar lógica de crecimiento
+          thisMonth: 0,
           lastMonth: 0,
           percentageChange: 0
         },
         revenue: {
-          monthly: 0, // Implementar cálculo de ingresos
+          monthly: 0,
           yearly: 0,
           currency: 'MXN'
         }
       };
 
-      ResponseUtils.success(res, stats, 'Estadísticas obtenidas exitosamente');
+      this.ok(res, stats, 'Estadísticas obtenidas exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
       ResponseUtils.error(
@@ -407,9 +417,7 @@ export class SubscriptionController {
     try {
       const cleaned = await this.subscriptionRepository.cleanupExpiredSubscriptions();
       
-      ResponseUtils.success(res, { 
-        cleaned 
-      }, `${cleaned} suscripciones expiradas eliminadas`);
+      this.ok(res, { cleaned }, `${cleaned} suscripciones expiradas eliminadas`);
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
       ResponseUtils.error(
@@ -419,32 +427,6 @@ export class SubscriptionController {
         errorResponse.message,
         errorResponse.details
       );
-    }
-  };
-
-  // POST /api/subscriptions/webhook
-  public handleWebhook = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const signature = req.headers['stripe-signature'] as string;
-      const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
-
-      if (!signature || !endpointSecret) {
-        ResponseUtils.error(res, 400, 'INVALID_WEBHOOK', 'Webhook signature missing');
-        return;
-      }
-
-      const payload = JSON.stringify(req.body);
-
-      await this.processWebhookUseCase.execute({
-        payload,
-        signature,
-        endpointSecret
-      });
-
-      ResponseUtils.success(res, { received: true }, 'Webhook procesado exitosamente');
-    } catch (error) {
-      this.logger.error('Error procesando webhook:', error);
-      ResponseUtils.error(res, 400, 'WEBHOOK_ERROR', 'Error procesando webhook');
     }
   };
 }

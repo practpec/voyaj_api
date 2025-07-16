@@ -1,13 +1,16 @@
 // src/modules/subscriptions/infrastructure/routes/subscriptionRoutes.ts
 import { Router } from 'express';
 import { SubscriptionController } from '../controllers/SubscriptionController';
+import { WebhookController } from '../controllers/WebhookController';
 import { AuthMiddleware } from '../../../../shared/middleware/AuthMiddleware';
+import { SubscriptionMiddleware } from '../middleware/SubscriptionMiddleware';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
 
-// Inicialización lazy del controlador
+// Inicialización lazy de controladores
 let subscriptionController: SubscriptionController | null = null;
+let webhookController: WebhookController | null = null;
 
 const getSubscriptionController = (): SubscriptionController => {
   if (!subscriptionController) {
@@ -16,7 +19,14 @@ const getSubscriptionController = (): SubscriptionController => {
   return subscriptionController;
 };
 
-// Rate limiting específico
+const getWebhookController = (): WebhookController => {
+  if (!webhookController) {
+    webhookController = new WebhookController();
+  }
+  return webhookController;
+};
+
+// Rate limiting
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 100,
@@ -33,7 +43,7 @@ const generalLimiter = rateLimit({
 
 // Webhook de Stripe
 router.post('/webhook/stripe',
-  (req, res) => getSubscriptionController().handleWebhook(req, res)
+  (req, res) => getWebhookController().handleStripeWebhook(req, res)
 );
 
 // ============================================================================
@@ -46,6 +56,7 @@ router.use(AuthMiddleware.authenticate);
 
 // Obtener suscripción actual del usuario
 router.get('/current',
+  SubscriptionMiddleware.addSubscriptionInfo,
   (req, res) => getSubscriptionController().getCurrentSubscription(req, res)
 );
 
@@ -69,6 +80,11 @@ router.get('/plans',
   (req, res) => getSubscriptionController().getAvailablePlans(req, res)
 );
 
+// Validar acceso a funcionalidades
+router.get('/feature-access',
+  (req, res) => getSubscriptionController().validateFeatureAccess(req, res)
+);
+
 // Crear sesión de checkout de Stripe
 router.post('/checkout-session',
   (req, res) => getSubscriptionController().createCheckoutSession(req, res)
@@ -76,11 +92,13 @@ router.post('/checkout-session',
 
 // Obtener portal de facturación de Stripe
 router.post('/billing-portal',
+  SubscriptionMiddleware.requireActiveSubscription,
   (req, res) => getSubscriptionController().createBillingPortalSession(req, res)
 );
 
 // Obtener historial de facturación
 router.get('/billing-history',
+  SubscriptionMiddleware.requireActiveSubscription,
   (req, res) => getSubscriptionController().getBillingHistory(req, res)
 );
 

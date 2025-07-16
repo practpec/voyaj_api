@@ -3,23 +3,30 @@
 // DTO para crear suscripción
 export interface CreateSubscriptionDTO {
   userId: string;
-  plan: 'EXPLORADOR' | 'AVENTURERO' | 'EXPEDICIONARIO';
+  planCode: string;
   paymentMethodId?: string;
   trialDays?: number;
   couponCode?: string;
 }
 
-// DTO para actualizar suscripción (cambio de plan)
+// DTO para actualizar suscripción
 export interface UpdateSubscriptionDTO {
   subscriptionId: string;
-  newPlan: 'EXPLORADOR' | 'AVENTURERO' | 'EXPEDICIONARIO';
-  prorationBehavior?: 'none' | 'create_prorations' | 'always_invoice';
+  newPlanCode: string;
+  userId: string;
+}
+
+// DTO para cancelar suscripción
+export interface CancelSubscriptionDTO {
+  userId: string;
+  cancelImmediately?: boolean;
+  reason?: string;
 }
 
 // DTO para crear sesión de checkout
 export interface CreateCheckoutSessionDTO {
   userId: string;
-  plan: 'AVENTURERO' | 'EXPEDICIONARIO';
+  planCode: string;
   mode: 'subscription' | 'payment';
   trialDays?: number;
   couponCode?: string;
@@ -33,11 +40,18 @@ export interface CreateBillingPortalDTO {
   returnUrl: string;
 }
 
+// DTO para procesar webhook
+export interface ProcessWebhookDTO {
+  payload: string;
+  signature: string;
+  endpointSecret: string;
+}
+
 // DTO de respuesta de suscripción
 export interface SubscriptionResponseDTO {
   id: string;
   userId: string;
-  plan: string;
+  planCode: string;
   status: string;
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
@@ -46,17 +60,10 @@ export interface SubscriptionResponseDTO {
   isCanceled: boolean;
   isTrialing: boolean;
   trialEnd?: Date;
-  planLimits: {
-    activeTrips: number | string;
-    photosPerTrip: number | string;
-    groupTripParticipants: number | string;
-    exportFormats: string[];
-    offlineMode: boolean;
-  };
   stripeSubscriptionId?: string;
   stripeCustomerId?: string;
   createdAt: Date;
-  updatedAt: Date;
+  updatedAt?: Date;
 }
 
 // DTO de respuesta de sesión de checkout
@@ -69,52 +76,6 @@ export interface CheckoutSessionResponseDTO {
 // DTO de respuesta de portal de facturación
 export interface BillingPortalResponseDTO {
   portalUrl: string;
-}
-
-// DTO para planes disponibles
-export interface PlanDetailsDTO {
-  id: string;
-  name: string;
-  description: string;
-  price: {
-    monthly: number;
-    yearly: number;
-    currency: string;
-  };
-  features: string[];
-  limits: {
-    activeTrips: number | string;
-    photosPerTrip: number | string;
-    groupTripParticipants: number | string;
-    exportFormats: string[];
-    offlineMode: boolean;
-  };
-  popular?: boolean;
-  stripePriceIds: {
-    monthly: string;
-    yearly: string;
-  };
-}
-
-// DTO para estadísticas de suscripciones
-export interface SubscriptionStatsDTO {
-  totalActive: number;
-  totalCanceled: number;
-  byPlan: {
-    EXPLORADOR: number;
-    AVENTURERO: number;
-    EXPEDICIONARIO: number;
-  };
-  growth: {
-    thisMonth: number;
-    lastMonth: number;
-    percentageChange: number;
-  };
-  revenue: {
-    monthly: number;
-    yearly: number;
-    currency: string;
-  };
 }
 
 // DTO para validación de funcionalidades
@@ -146,5 +107,46 @@ export interface BillingHistoryDTO {
     date: Date;
     amount: number;
     currency: string;
+  };
+}
+
+// DTO para estadísticas de suscripciones
+export interface SubscriptionStatsDTO {
+  totalActive: number;
+  totalCanceled: number;
+  byPlan: Record<string, number>;
+  growth: {
+    thisMonth: number;
+    lastMonth: number;
+    percentageChange: number;
+  };
+  revenue: {
+    monthly: number;
+    yearly: number;
+    currency: string;
+  };
+}
+
+// DTO para planes disponibles
+export interface PlanDetailsDTO {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  currency: string;
+  features: string[];
+  limits: {
+    activeTrips: number | string;
+    photosPerTrip: number | string;
+    groupTripParticipants: number | string;
+    exportFormats: string[];
+    offlineMode: boolean;
+  };
+  popular?: boolean;
+  stripePriceIds: {
+    monthly?: string;
+    yearly?: string;
   };
 }

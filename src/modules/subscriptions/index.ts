@@ -1,25 +1,30 @@
 // src/modules/subscriptions/index.ts
 
 // Domain exports
-export { Subscription, SubscriptionPlan, SubscriptionStatus } from './domain/Subscription';
+export { Subscription } from './domain/Subscription';
+export { Plan } from './domain/Plan';
 export { SubscriptionService } from './domain/SubscriptionService';
 export { SubscriptionEvents, SUBSCRIPTION_EVENT_TYPES } from './domain/SubscriptionEvents';
 export { ISubscriptionRepository } from './domain/interfaces/ISubscriptionRepository';
+export { IPlanRepository } from './domain/interfaces/IPlanRepository';
 
 // Application exports
 export { CreateSubscriptionUseCase } from './application/useCases/CreateSubscription';
 export { UpdateSubscriptionUseCase } from './application/useCases/UpdateSubscription';
 export { CancelSubscriptionUseCase } from './application/useCases/CancelSubscription';
 export { GetSubscriptionUseCase } from './application/useCases/GetSubscription';
-export { ProcessWebhookUseCase } from './application/useCases/ProcessWebhook';
 export { GetAvailablePlansUseCase } from './application/useCases/GetAvailablePlans';
+export { ProcessWebhookUseCase } from './application/useCases/ProcessWebhook';
+export { ValidateFeatureAccessUseCase } from './application/useCases/ValidateFeatureAccess';
 
 // DTOs
 export {
   CreateSubscriptionDTO,
   UpdateSubscriptionDTO,
+  CancelSubscriptionDTO,
   CreateCheckoutSessionDTO,
   CreateBillingPortalDTO,
+  ProcessWebhookDTO,
   SubscriptionResponseDTO,
   CheckoutSessionResponseDTO,
   BillingPortalResponseDTO,
@@ -33,18 +38,21 @@ export {
 export { SubscriptionController } from './infrastructure/controllers/SubscriptionController';
 export { WebhookController } from './infrastructure/controllers/WebhookController';
 export { SubscriptionMongoRepository } from './infrastructure/repositories/SubscriptionMongoRepository';
+export { PlanMongoRepository } from './infrastructure/repositories/PlanMongoRepository';
 export { StripeService } from './infrastructure/services/StripeService';
-export { NotificationService } from './infrastructure/services/NotificationService';
-export { SubscriptionValidationService } from './infrastructure/services/SubscriptionValidationService';
 export { SubscriptionMiddleware } from './infrastructure/middleware/SubscriptionMiddleware';
-export { SubscriptionEventHandlers } from './infrastructure/events/SubscriptionEventHandlers';
-export { SubscriptionRoutes } from './infrastructure/routes/SubscriptionRoutes';
+export { subscriptionRoutes } from './infrastructure/routes/subscriptionRoutes';
+
+// Seeds
+export { PlansSeedService } from './infrastructure/seeds/plansSeed';
 
 // Module configuration
 export class SubscriptionModule {
-  public static async initialize() {
-    // Aquí se puede agregar lógica de inicialización del módulo
-    // como registro de eventos, configuración de dependencias, etc.
-    console.log('Subscription module initialized');
+  public static async initialize(): Promise<void> {
+    // Inicializar seed de planes si es necesario
+    if (process.env.SEED_PLANS === 'true') {
+      const plansSeedService = new PlansSeedService();
+      await plansSeedService.seedPlans();
+    }
   }
 }

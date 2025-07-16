@@ -3,13 +3,31 @@ import { Request, Response } from 'express';
 import { ProcessWebhookUseCase } from '../../application/useCases/ProcessWebhook';
 import { BaseController } from '../../../../shared/controllers/BaseController';
 import { LoggerService } from '../../../../shared/services/LoggerService';
+import { SubscriptionMongoRepository } from '../repositories/SubscriptionMongoRepository';
+import { UserMongoRepository } from '../../../users/infrastructure/repositories/UserMongoRepository';
+import { StripeService } from '../services/StripeService';
+import { EventBus } from '../../../../shared/events/EventBus';
 
 export class WebhookController extends BaseController {
-  constructor(
-    private processWebhookUseCase: ProcessWebhookUseCase,
-    protected logger: LoggerService
-  ) {
+  private processWebhookUseCase: ProcessWebhookUseCase;
+
+  constructor() {
+    const logger = LoggerService.getInstance();
     super(logger);
+
+    // Inicializar dependencias
+    const subscriptionRepository = new SubscriptionMongoRepository();
+    const userRepository = new UserMongoRepository();
+    const stripeService = StripeService.getInstance();
+    const eventBus = EventBus.getInstance();
+
+    this.processWebhookUseCase = new ProcessWebhookUseCase(
+      subscriptionRepository,
+      userRepository,
+      stripeService,
+      eventBus,
+      logger
+    );
   }
 
   // Procesar webhook de Stripe

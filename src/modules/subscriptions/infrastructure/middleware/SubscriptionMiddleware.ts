@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { GetSubscriptionUseCase } from '../../application/useCases/GetSubscription';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import { SubscriptionMongoRepository } from '../repositories/SubscriptionMongoRepository';
+import { PlanMongoRepository } from '../repositories/PlanMongoRepository';
 import { ResponseUtils } from '../../../../shared/utils/ResponseUtils';
 
 // Extender Request para incluir información de suscripción
@@ -11,13 +12,13 @@ declare global {
     interface Request {
       subscription?: {
         id: string;
-        plan: string;
+        planCode: string;
         status: string;
         isActive: boolean;
         limits: {
-          activeTrips: number | string;
-          photosPerTrip: number | string;
-          groupTripParticipants: number | string;
+          activeTrips: number;
+          photosPerTrip: number;
+          groupTripParticipants: number;
           exportFormats: string[];
           offlineMode: boolean;
         };
@@ -34,8 +35,10 @@ export class SubscriptionMiddleware {
   private static initializeServices(): void {
     if (!this.getSubscriptionUseCase) {
       const subscriptionRepository = new SubscriptionMongoRepository();
+      const planRepository = new PlanMongoRepository();
       this.getSubscriptionUseCase = new GetSubscriptionUseCase(
         subscriptionRepository,
+        planRepository,
         this.logger
       );
     }
@@ -66,7 +69,7 @@ export class SubscriptionMiddleware {
       // Agregar información de suscripción al request
       req.subscription = {
         id: subscription.id,
-        plan: subscription.plan,
+        planCode: subscription.planCode,
         status: subscription.status,
         isActive: subscription.isActive,
         limits: subscription.planLimits
@@ -80,7 +83,7 @@ export class SubscriptionMiddleware {
   };
 
   // Middleware para verificar plan específico
-  public static requirePlan = (requiredPlan: string) => {
+  public static requirePlan = (requiredPlanCode: string) => {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
         const userId = req.user?.userId;
@@ -93,16 +96,16 @@ export class SubscriptionMiddleware {
         this.initializeServices();
         const subscription = await this.getSubscriptionUseCase.execute(userId);
 
-        if (!subscription || subscription.plan !== requiredPlan) {
-          ResponseUtils.error(res, 403, 'PLAN_REQUIRED', `Plan ${requiredPlan} requerido`, {
-            currentPlan: subscription?.plan || 'NONE'
+        if (!subscription || subscription.planCode !== requiredPlanCode) {
+          ResponseUtils.error(res, 403, 'PLAN_REQUIRED', `Plan ${requiredPlanCode} requerido`, {
+            currentPlan: subscription?.planCode || 'NONE'
           });
           return;
         }
 
         req.subscription = {
           id: subscription.id,
-          plan: subscription.plan,
+          planCode: subscription.planCode,
           status: subscription.status,
           isActive: subscription.isActive,
           limits: subscription.planLimits
@@ -141,14 +144,14 @@ export class SubscriptionMiddleware {
         if (!hasFeature) {
           ResponseUtils.error(res, 403, 'FEATURE_NOT_AVAILABLE', 
             `Funcionalidad ${feature} no disponible en tu plan`, {
-            currentPlan: subscription.plan
+            currentPlan: subscription.planCode
           });
           return;
         }
 
         req.subscription = {
           id: subscription.id,
-          plan: subscription.plan,
+          planCode: subscription.planCode,
           status: subscription.status,
           isActive: subscription.isActive,
           limits: subscription.planLimits
@@ -178,7 +181,7 @@ export class SubscriptionMiddleware {
         if (subscription) {
           req.subscription = {
             id: subscription.id,
-            plan: subscription.plan,
+            planCode: subscription.planCode,
             status: subscription.status,
             isActive: subscription.isActive,
             limits: subscription.planLimits

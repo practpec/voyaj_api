@@ -4,7 +4,7 @@
 export interface SubscriptionCreatedEventData {
   subscriptionId: string;
   userId: string;
-  plan: string;
+  planCode: string;
   status: string;
   createdAt: Date;
   stripeSubscriptionId?: string;
@@ -13,7 +13,7 @@ export interface SubscriptionCreatedEventData {
 export interface SubscriptionActivatedEventData {
   subscriptionId: string;
   userId: string;
-  plan: string;
+  planCode: string;
   activatedAt: Date;
   currentPeriodEnd: Date;
 }
@@ -21,7 +21,7 @@ export interface SubscriptionActivatedEventData {
 export interface SubscriptionCanceledEventData {
   subscriptionId: string;
   userId: string;
-  plan: string;
+  planCode: string;
   canceledAt: Date;
   cancelAtPeriodEnd: boolean;
   reason?: string;
@@ -30,15 +30,15 @@ export interface SubscriptionCanceledEventData {
 export interface SubscriptionPlanChangedEventData {
   subscriptionId: string;
   userId: string;
-  oldPlan: string;
-  newPlan: string;
+  oldPlanCode: string;
+  newPlanCode: string;
   changedAt: Date;
 }
 
 export interface SubscriptionExpiredEventData {
   subscriptionId: string;
   userId: string;
-  plan: string;
+  planCode: string;
   expiredAt: Date;
 }
 
@@ -64,7 +64,7 @@ export interface PaymentFailedEventData {
 export interface TrialEndingSoonEventData {
   subscriptionId: string;
   userId: string;
-  plan: string;
+  planCode: string;
   trialEndDate: Date;
   daysRemaining: number;
 }

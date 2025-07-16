@@ -1,6 +1,8 @@
 // src/modules/subscriptions/domain/SubscriptionService.ts
-import { Subscription, SubscriptionPlan, SubscriptionStatus } from './Subscription';
+import { Subscription } from './Subscription';
+import { Plan } from './Plan';
 import { ISubscriptionRepository } from './interfaces/ISubscriptionRepository';
+import { IPlanRepository } from './interfaces/IPlanRepository';
 import { SubscriptionEvents } from './SubscriptionEvents';
 import { EventBus } from '../../../shared/events/EventBus';
 import { LoggerService } from '../../../shared/services/LoggerService';
@@ -8,6 +10,7 @@ import { LoggerService } from '../../../shared/services/LoggerService';
 export class SubscriptionService {
   constructor(
     private subscriptionRepository: ISubscriptionRepository,
+    private planRepository: IPlanRepository,
     private eventBus: EventBus,
     private logger: LoggerService
   ) {}
@@ -17,18 +20,15 @@ export class SubscriptionService {
     const subscription = await this.subscriptionRepository.findActiveByUserId(userId);
     
     if (!subscription) {
-      // Sin suscripción = plan gratuito básico
       return false;
     }
 
-    // Si es plan ilimitado
-    if (subscription.planLimits.activeTrips === -1) {
-      return true;
+    const plan = await this.planRepository.findById(subscription.planId);
+    if (!plan) {
+      return false;
     }
 
-    // Aquí necesitarías verificar cuántos viajes activos tiene el usuario
-    // Por ahora retornamos true si tiene una suscripción activa
-    return subscription.isActive;
+    return plan.limits.activeTrips === -1 || plan.limits.activeTrips > 0;
   }
 
   // Verificar si un usuario puede subir más fotos a un viaje
@@ -36,16 +36,19 @@ export class SubscriptionService {
     const subscription = await this.subscriptionRepository.findActiveByUserId(userId);
     
     if (!subscription) {
-      // Plan gratuito: 10 fotos por viaje
-      return currentPhotoCount < 10;
+      return currentPhotoCount < 10; // Plan gratuito por defecto
     }
 
-    // Si es plan ilimitado
-    if (subscription.planLimits.photosPerTrip === -1) {
-      return true;
+    const plan = await this.planRepository.findById(subscription.planId);
+    if (!plan) {
+      return false;
     }
 
-    return currentPhotoCount < subscription.planLimits.photosPerTrip;
+    if (plan.limits.photosPerTrip === -1) {
+      return true; // Ilimitado
+    }
+
+    return currentPhotoCount < plan.limits.photosPerTrip;
   }
 
   // Verificar si un usuario puede agregar participantes a un viaje grupal
@@ -53,21 +56,23 @@ export class SubscriptionService {
     const subscription = await this.subscriptionRepository.findActiveByUserId(userId);
     
     if (!subscription) {
-      // Plan gratuito: no permite viajes grupales
+      return false; // Plan gratuito no permite viajes grupales
+    }
+
+    const plan = await this.planRepository.findById(subscription.planId);
+    if (!plan) {
       return false;
     }
 
-    // Si no permite viajes grupales
-    if (subscription.planLimits.groupTripParticipants === 0) {
+    if (plan.limits.groupTripParticipants === 0) {
       return false;
     }
 
-    // Si es ilimitado
-    if (subscription.planLimits.groupTripParticipants === -1) {
-      return true;
+    if (plan.limits.groupTripParticipants === -1) {
+      return true; // Ilimitado
     }
 
-    return currentParticipants < subscription.planLimits.groupTripParticipants;
+    return currentParticipants < plan.limits.groupTripParticipants;
   }
 
   // Verificar si un usuario puede usar modo offline
@@ -78,7 +83,8 @@ export class SubscriptionService {
       return false;
     }
 
-    return subscription.planLimits.offlineMode;
+    const plan = await this.planRepository.findById(subscription.planId);
+    return plan ? plan.limits.offlineMode : false;
   }
 
   // Verificar qué formatos de exportación están disponibles
@@ -86,11 +92,11 @@ export class SubscriptionService {
     const subscription = await this.subscriptionRepository.findActiveByUserId(userId);
     
     if (!subscription) {
-      // Plan gratuito: solo PDF básico
-      return ['PDF'];
+      return ['PDF']; // Plan gratuito básico
     }
 
-    return subscription.planLimits.exportFormats;
+    const plan = await this.planRepository.findById(subscription.planId);
+    return plan ? plan.limits.exportFormats : ['PDF'];
   }
 
   // Procesar la expiración de trial
@@ -106,30 +112,39 @@ export class SubscriptionService {
       return;
     }
 
+    // Buscar plan gratuito
+    const freePlan = await this.planRepository.findByCode('EXPLORADOR');
+    if (!freePlan) {
+      this.logger.error('Plan gratuito no encontrado');
+      return;
+    }
+
     // Cambiar a plan gratuito
-    subscription.downgradeToFree();
+    subscription.changePlan(freePlan.id);
     await this.subscriptionRepository.update(subscription);
 
     // Emitir evento
     const event = SubscriptionEvents.subscriptionExpired({
       subscriptionId: subscription.id,
       userId: subscription.userId,
-      plan: subscription.plan,
+      planCode: freePlan.code,
       expiredAt: new Date()
     });
 
-    await this.eventBus.publish(event.eventType, event.eventData);
+    await this.eventBus.publishTripEvent(event.eventType, subscriptionId, event.eventData);
 
     this.logger.info(`Trial expirado para suscripción: ${subscriptionId}`);
   }
 
   // Notificar trial próximo a expirar
   public async notifyTrialEndingSoon(): Promise<void> {
-    // Buscar suscripciones que expiran en 3 días
     const subscriptionsEndingSoon = await this.subscriptionRepository.findSubscriptionsEndingInDays(3);
     
     for (const subscription of subscriptionsEndingSoon) {
       if (subscription.isTrialing) {
+        const plan = await this.planRepository.findById(subscription.planId);
+        if (!plan) continue;
+
         const daysRemaining = Math.ceil(
           (subscription.data.trialEnd!.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
         );
@@ -137,33 +152,14 @@ export class SubscriptionService {
         const event = SubscriptionEvents.trialEndingSoon({
           subscriptionId: subscription.id,
           userId: subscription.userId,
-          plan: subscription.plan,
+          planCode: plan.code,
           trialEndDate: subscription.data.trialEnd!,
           daysRemaining
         });
 
-        await this.eventBus.publish(event.eventType, event.eventData);
+        await this.eventBus.publishTripEvent(event.eventType, subscription.id, event.eventData);
       }
     }
-  }
-
-  // Validar cambio de plan
-  public async validatePlanChange(
-    userId: string, 
-    currentPlan: SubscriptionPlan, 
-    newPlan: SubscriptionPlan
-  ): Promise<{ valid: boolean; reason?: string }> {
-    
-    // No se puede cambiar a un plan inferior si se exceden los límites
-    if (this.isPlanDowngrade(currentPlan, newPlan)) {
-      // Aquí verificarías si el usuario excede los límites del nuevo plan
-      // Por ejemplo, si tiene más viajes activos que los permitidos
-      
-      // Por ahora permitimos todos los cambios
-      return { valid: true };
-    }
-
-    return { valid: true };
   }
 
   // Limpiar suscripciones expiradas
@@ -174,40 +170,28 @@ export class SubscriptionService {
     return deleted;
   }
 
-  // Métodos auxiliares privados
-  private isPlanDowngrade(currentPlan: SubscriptionPlan, newPlan: SubscriptionPlan): boolean {
-    const planHierarchy = {
-      'EXPLORADOR': 0,
-      'AVENTURERO': 1,
-      'EXPEDICIONARIO': 2
-    };
-
-    return planHierarchy[newPlan] < planHierarchy[currentPlan];
-  }
-
   // Obtener estadísticas de suscripciones
   public async getSubscriptionStats(): Promise<{
     totalActive: number;
     byPlan: Record<string, number>;
     totalCanceled: number;
   }> {
-    const [totalActive, totalCanceled, explorerCount, adventurerCount, expeditionaryCount] = 
-      await Promise.all([
-        this.subscriptionRepository.countActiveSubscriptions(),
-        this.subscriptionRepository.countCanceledSubscriptions(),
-        this.subscriptionRepository.countSubscriptionsByPlan('EXPLORADOR'),
-        this.subscriptionRepository.countSubscriptionsByPlan('AVENTURERO'),
-        this.subscriptionRepository.countSubscriptionsByPlan('EXPEDICIONARIO')
-      ]);
+    const [totalActive, totalCanceled, activePlans] = await Promise.all([
+      this.subscriptionRepository.countActiveSubscriptions(),
+      this.subscriptionRepository.countCanceledSubscriptions(),
+      this.planRepository.findActivePlans()
+    ]);
+
+    const byPlan: Record<string, number> = {};
+    
+    for (const plan of activePlans) {
+      byPlan[plan.code] = await this.subscriptionRepository.countSubscriptionsByPlan(plan.id);
+    }
 
     return {
       totalActive,
       totalCanceled,
-      byPlan: {
-        'EXPLORADOR': explorerCount,
-        'AVENTURERO': adventurerCount,
-        'EXPEDICIONARIO': expeditionaryCount
-      }
+      byPlan
     };
   }
 }

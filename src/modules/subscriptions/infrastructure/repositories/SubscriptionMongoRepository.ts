@@ -21,40 +21,12 @@ export class SubscriptionMongoRepository implements ISubscriptionRepository {
   private async createIndexes(): Promise<void> {
     try {
       await Promise.all([
-        // Índice único por usuario (solo puede tener una suscripción activa)
-        this.collection.createIndex(
-          { userId: 1, status: 1 },
-          { background: true }
-        ),
-        
-        // Índice para Stripe IDs
-        this.collection.createIndex(
-          { stripeSubscriptionId: 1 },
-          { background: true, sparse: true }
-        ),
-        
-        this.collection.createIndex(
-          { stripeCustomerId: 1 },
-          { background: true, sparse: true }
-        ),
-
-        // Índice para vencimientos
-        this.collection.createIndex(
-          { currentPeriodEnd: 1 },
-          { background: true }
-        ),
-
-        // Índice para status
-        this.collection.createIndex(
-          { status: 1 },
-          { background: true }
-        ),
-
-        // Índice para plan
-        this.collection.createIndex(
-          { plan: 1 },
-          { background: true }
-        )
+        this.collection.createIndex({ userId: 1, status: 1 }, { background: true }),
+        this.collection.createIndex({ stripeSubscriptionId: 1 }, { background: true, sparse: true }),
+        this.collection.createIndex({ stripeCustomerId: 1 }, { background: true, sparse: true }),
+        this.collection.createIndex({ currentPeriodEnd: 1 }, { background: true }),
+        this.collection.createIndex({ status: 1 }, { background: true }),
+        this.collection.createIndex({ planId: 1 }, { background: true })
       ]);
       
       this.logger.info('Índices de suscripciones creados exitosamente');
@@ -63,7 +35,6 @@ export class SubscriptionMongoRepository implements ISubscriptionRepository {
     }
   }
 
-  // Operaciones básicas CRUD
   public async create(subscription: Subscription): Promise<void> {
     try {
       const subscriptionData = subscription.toData();
@@ -127,7 +98,6 @@ export class SubscriptionMongoRepository implements ISubscriptionRepository {
     }
   }
 
-  // Operaciones específicas de suscripciones
   public async findActiveByUserId(userId: string): Promise<Subscription | null> {
     try {
       const startTime = Date.now();
@@ -176,7 +146,6 @@ export class SubscriptionMongoRepository implements ISubscriptionRepository {
     }
   }
 
-  // Consultas de estado
   public async findExpiredSubscriptions(): Promise<Subscription[]> {
     try {
       const now = new Date();
@@ -217,10 +186,10 @@ export class SubscriptionMongoRepository implements ISubscriptionRepository {
     }
   }
 
-  public async findActiveSubscriptionsByPlan(plan: string): Promise<Subscription[]> {
+  public async findActiveSubscriptionsByPlan(planId: string): Promise<Subscription[]> {
     try {
       const subscriptionsData = await this.collection.find({
-        plan,
+        planId,
         status: { $in: ['ACTIVE', 'TRIALING'] }
       }).toArray();
       
@@ -233,7 +202,6 @@ export class SubscriptionMongoRepository implements ISubscriptionRepository {
     }
   }
 
-  // Estadísticas
   public async countActiveSubscriptions(): Promise<number> {
     try {
       return await this.collection.countDocuments({
@@ -244,10 +212,10 @@ export class SubscriptionMongoRepository implements ISubscriptionRepository {
     }
   }
 
-  public async countSubscriptionsByPlan(plan: string): Promise<number> {
+  public async countSubscriptionsByPlan(planId: string): Promise<number> {
     try {
       return await this.collection.countDocuments({
-        plan,
+        planId,
         status: { $in: ['ACTIVE', 'TRIALING'] }
       });
     } catch (error) {
@@ -265,7 +233,6 @@ export class SubscriptionMongoRepository implements ISubscriptionRepository {
     }
   }
 
-  // Operaciones de limpieza
   public async cleanupExpiredSubscriptions(): Promise<number> {
     try {
       const thirtyDaysAgo = new Date();

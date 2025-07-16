@@ -2,21 +2,18 @@
 import { ISubscriptionRepository } from '../../domain/interfaces/ISubscriptionRepository';
 import { IUserRepository } from '../../../users/domain/interfaces/IUserRepository';
 import { StripeService } from '../../infrastructure/services/StripeService';
+import { SubscriptionEvents } from '../../domain/SubscriptionEvents';
+import { EventBus } from '../../../../shared/events/EventBus';
 import { LoggerService } from '../../../../shared/services/LoggerService';
-import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
+import { ProcessWebhookDTO } from '../dtos/SubscriptionDTO';
 import Stripe from 'stripe';
-
-export interface ProcessWebhookDTO {
-  payload: string;
-  signature: string;
-  endpointSecret: string;
-}
 
 export class ProcessWebhookUseCase {
   constructor(
     private subscriptionRepository: ISubscriptionRepository,
     private userRepository: IUserRepository,
     private stripeService: StripeService,
+    private eventBus: EventBus,
     private logger: LoggerService
   ) {}
 
@@ -128,6 +125,18 @@ export class ProcessWebhookUseCase {
           await this.subscriptionRepository.update(subscription);
         }
 
+        // Publicar evento de pago exitoso
+        const event = SubscriptionEvents.paymentSucceeded({
+          subscriptionId: subscription.id,
+          userId: subscription.userId,
+          amount: invoice.amount_paid,
+          currency: invoice.currency,
+          paidAt: new Date(invoice.created * 1000),
+          invoiceId: invoice.id
+        });
+
+        await this.eventBus.publishTripEvent(event.eventType, subscription.id, event.eventData);
+
         this.logger.info(`Pago exitoso para suscripción: ${subscription.id}`);
       }
     }
@@ -147,6 +156,19 @@ export class ProcessWebhookUseCase {
         });
         await this.subscriptionRepository.update(subscription);
 
+        // Publicar evento de pago fallido
+        const event = SubscriptionEvents.paymentFailed({
+          subscriptionId: subscription.id,
+          userId: subscription.userId,
+          amount: invoice.amount_due,
+          currency: invoice.currency,
+          failedAt: new Date(invoice.created * 1000),
+          reason: 'Payment failed',
+          attemptCount: invoice.attempt_count || 1
+        });
+
+        await this.eventBus.publishTripEvent(event.eventType, subscription.id, event.eventData);
+
         this.logger.warn(`Pago fallido para suscripción: ${subscription.id}`);
       }
     }
@@ -158,7 +180,20 @@ export class ProcessWebhookUseCase {
     );
 
     if (subscription) {
-      // Aquí podrías enviar notificaciones al usuario sobre el fin del trial
+      // Publicar evento de trial próximo a expirar
+      const daysRemaining = subscription.data.trialEnd ? 
+        Math.ceil((subscription.data.trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+
+      const event = SubscriptionEvents.trialEndingSoon({
+        subscriptionId: subscription.id,
+        userId: subscription.userId,
+        planCode: 'PLAN_CODE', // Necesitaríamos obtener el plan
+        trialEndDate: subscription.data.trialEnd!,
+        daysRemaining
+      });
+
+      await this.eventBus.publishTripEvent(event.eventType, subscription.id, event.eventData);
+
       this.logger.info(`Trial terminará pronto para suscripción: ${subscription.id}`);
     }
   }

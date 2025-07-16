@@ -1,19 +1,11 @@
 // src/modules/subscriptions/application/useCases/GetSubscription.ts
 import { ISubscriptionRepository } from '../../domain/interfaces/ISubscriptionRepository';
+import { IPlanRepository } from '../../domain/interfaces/IPlanRepository';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
+import { SubscriptionResponseDTO } from '../dtos/SubscriptionDTO';
 
-export interface SubscriptionResponseDTO {
-  id: string;
-  plan: string;
-  status: string;
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  cancelAtPeriodEnd: boolean;
-  isActive: boolean;
-  isCanceled: boolean;
-  isTrialing: boolean;
-  trialEnd?: Date;
+export interface SubscriptionWithPlanLimits extends SubscriptionResponseDTO {
   planLimits: {
     activeTrips: number | string;
     photosPerTrip: number | string;
@@ -26,10 +18,11 @@ export interface SubscriptionResponseDTO {
 export class GetSubscriptionUseCase {
   constructor(
     private subscriptionRepository: ISubscriptionRepository,
+    private planRepository: IPlanRepository,
     private logger: LoggerService
   ) {}
 
-  public async execute(userId: string): Promise<SubscriptionResponseDTO | null> {
+  public async execute(userId: string): Promise<SubscriptionWithPlanLimits | null> {
     try {
       // Validar entrada
       if (!userId) {
@@ -44,12 +37,19 @@ export class GetSubscriptionUseCase {
         return null;
       }
 
-      // Mapear a DTO de respuesta
-      const limits = subscription.planLimits;
+      // Obtener información del plan
+      const plan = await this.planRepository.findById(subscription.planId);
       
-      const response: SubscriptionResponseDTO = {
+      if (!plan) {
+        this.logger.warn(`Plan no encontrado para suscripción: ${subscription.id}`);
+        return null;
+      }
+
+      // Mapear a DTO de respuesta
+      const response: SubscriptionWithPlanLimits = {
         id: subscription.id,
-        plan: subscription.plan,
+        userId: subscription.userId,
+        planCode: plan.code,
         status: subscription.status,
         currentPeriodStart: subscription.data.currentPeriodStart,
         currentPeriodEnd: subscription.currentPeriodEnd,
@@ -58,17 +58,21 @@ export class GetSubscriptionUseCase {
         isCanceled: subscription.isCanceled,
         isTrialing: subscription.isTrialing,
         trialEnd: subscription.data.trialEnd,
+        stripeSubscriptionId: subscription.stripeSubscriptionId,
+        stripeCustomerId: subscription.stripeCustomerId,
+        createdAt: subscription.data.createdAt,
+        updatedAt: subscription.data.updatedAt,
         planLimits: {
-          activeTrips: limits.activeTrips === -1 ? 'Ilimitados' : limits.activeTrips,
-          photosPerTrip: limits.photosPerTrip === -1 ? 'Ilimitadas' : limits.photosPerTrip,
-          groupTripParticipants: limits.groupTripParticipants === -1 ? 'Ilimitados' : 
-            limits.groupTripParticipants === 0 ? 'No disponible' : limits.groupTripParticipants,
-          exportFormats: limits.exportFormats,
-          offlineMode: limits.offlineMode
+          activeTrips: plan.limits.activeTrips === -1 ? 'Ilimitados' : plan.limits.activeTrips,
+          photosPerTrip: plan.limits.photosPerTrip === -1 ? 'Ilimitadas' : plan.limits.photosPerTrip,
+          groupTripParticipants: plan.limits.groupTripParticipants === -1 ? 'Ilimitados' : 
+            plan.limits.groupTripParticipants === 0 ? 'No disponible' : plan.limits.groupTripParticipants,
+          exportFormats: plan.limits.exportFormats,
+          offlineMode: plan.limits.offlineMode
         }
       };
 
-      this.logger.debug(`Suscripción encontrada para usuario: ${userId}, plan: ${subscription.plan}`);
+      this.logger.debug(`Suscripción encontrada para usuario: ${userId}, plan: ${plan.code}`);
       return response;
 
     } catch (error) {

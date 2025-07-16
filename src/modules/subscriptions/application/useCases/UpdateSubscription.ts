@@ -1,20 +1,19 @@
 // src/modules/subscriptions/application/useCases/UpdateSubscription.ts
 import { ISubscriptionRepository } from '../../domain/interfaces/ISubscriptionRepository';
+import { IPlanRepository } from '../../domain/interfaces/IPlanRepository';
 import { StripeService } from '../../infrastructure/services/StripeService';
+import { SubscriptionEvents } from '../../domain/SubscriptionEvents';
+import { EventBus } from '../../../../shared/events/EventBus';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
-import { PLANS, PLAN_LIMITS } from '../../../../shared/constants/paymentConstants';
-
-export interface UpdateSubscriptionDTO {
-  subscriptionId: string;
-  newPlan: keyof typeof PLANS;
-  userId: string;
-}
+import { UpdateSubscriptionDTO } from '../dtos/SubscriptionDTO';
 
 export class UpdateSubscriptionUseCase {
   constructor(
     private subscriptionRepository: ISubscriptionRepository,
+    private planRepository: IPlanRepository,
     private stripeService: StripeService,
+    private eventBus: EventBus,
     private logger: LoggerService
   ) {}
 
@@ -34,17 +33,26 @@ export class UpdateSubscriptionUseCase {
         throw new Error('No tienes permisos para modificar esta suscripción');
       }
 
+      // Obtener plan actual y nuevo plan
+      const [currentPlan, newPlan] = await Promise.all([
+        this.planRepository.findById(subscription.planId),
+        this.planRepository.findByCode(dto.newPlanCode)
+      ]);
+
+      if (!currentPlan || !newPlan) {
+        throw new Error('Plan no encontrado');
+      }
+
       // Validar que el plan sea diferente
-      if (subscription.plan === dto.newPlan) {
+      if (currentPlan.code === newPlan.code) {
         throw new Error('Ya tienes este plan activo');
       }
 
       // Si es cambio a plan gratuito, cancelar suscripción
-      if (dto.newPlan === 'EXPLORADOR') {
-        subscription.cancel(true);
-        await this.subscriptionRepository.update(subscription);
-        
-        this.logger.info(`Suscripción cancelada y cambiada a plan gratuito: ${dto.subscriptionId}`);
+      if (newPlan.isFree) {
+        await this.downgradeTo
+
+(newPlan, subscription);
         return;
       }
 
@@ -53,20 +61,47 @@ export class UpdateSubscriptionUseCase {
         throw new Error('Suscripción sin ID de Stripe válido');
       }
 
-      const planConfig = PLAN_LIMITS[dto.newPlan];
-      
-      await this.stripeService.changePlan(subscription.stripeSubscriptionId, planConfig.priceId);
+      if (!newPlan.stripePriceIdMonthly) {
+        throw new Error('Nuevo plan sin precio configurado');
+      }
+
+      await this.stripeService.changePlan(subscription.stripeSubscriptionId, newPlan.stripePriceIdMonthly);
 
       // Actualizar plan en nuestra BD
-      subscription.changePlan(dto.newPlan, planConfig.priceId);
+      subscription.changePlan(newPlan.id, newPlan.stripePriceIdMonthly);
       await this.subscriptionRepository.update(subscription);
 
-      this.logger.info(`Plan cambiado exitosamente: ${dto.subscriptionId} a ${dto.newPlan}`);
+      // Publicar evento
+      const event = SubscriptionEvents.subscriptionPlanChanged({
+        subscriptionId: subscription.id,
+        userId: subscription.userId,
+        oldPlanCode: currentPlan.code,
+        newPlanCode: newPlan.code,
+        changedAt: new Date()
+      });
+
+      await this.eventBus.publishTripEvent(event.eventType, subscription.id, event.eventData);
+
+      this.logger.info(`Plan cambiado exitosamente: ${dto.subscriptionId} de ${currentPlan.code} a ${newPlan.code}`);
 
     } catch (error) {
       this.logger.error(`Error actualizando suscripción ${dto.subscriptionId}:`, error);
       throw error;
     }
+  }
+
+  private async downgradeToFree(newPlan: any, subscription: any): Promise<void> {
+    // Cancelar suscripción actual en Stripe si existe
+    if (subscription.stripeSubscriptionId) {
+      await this.stripeService.cancelSubscription(subscription.stripeSubscriptionId, false);
+    }
+
+    // Cambiar a plan gratuito
+    subscription.changePlan(newPlan.id);
+    subscription.cancel(false); // Cancelar inmediatamente
+    await this.subscriptionRepository.update(subscription);
+
+    this.logger.info(`Suscripción cambiada a plan gratuito: ${subscription.id}`);
   }
 
   private validateInput(dto: UpdateSubscriptionDTO): void {
@@ -78,8 +113,8 @@ export class UpdateSubscriptionUseCase {
       throw ErrorHandler.createValidationError('ID de usuario requerido');
     }
 
-    if (!Object.values(PLANS).includes(dto.newPlan)) {
-      throw ErrorHandler.createValidationError('Plan inválido');
+    if (!dto.newPlanCode) {
+      throw ErrorHandler.createValidationError('Nuevo código de plan requerido');
     }
   }
 }

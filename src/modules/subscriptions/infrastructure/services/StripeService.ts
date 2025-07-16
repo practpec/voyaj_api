@@ -1,7 +1,6 @@
 // src/modules/subscriptions/infrastructure/services/StripeService.ts
 import Stripe from 'stripe';
 import { LoggerService } from '../../../../shared/services/LoggerService';
-import { STRIPE_CONFIG, PLAN_LIMITS } from '../../../../shared/constants/paymentConstants';
 
 export class StripeService {
   private static instance: StripeService;
@@ -17,7 +16,7 @@ export class StripeService {
     }
 
     this.stripe = new Stripe(secretKey, {
-      apiVersion: STRIPE_CONFIG.API_VERSION,
+      apiVersion: '2023-10-16',
       typescript: true
     });
 
@@ -34,7 +33,7 @@ export class StripeService {
   // Crear o obtener customer de Stripe
   public async createOrGetCustomer(userId: string, email: string, name?: string): Promise<Stripe.Customer> {
     try {
-      // Buscar customer existente por metadata
+      // Buscar customer existente por email
       const existingCustomers = await this.stripe.customers.list({
         email: email,
         limit: 1
@@ -171,7 +170,7 @@ export class StripeService {
   // Crear payment intent para pagos únicos
   public async createPaymentIntent(
     amount: number,
-    currency: string = STRIPE_CONFIG.CURRENCY,
+    currency: string = 'mxn',
     customerId?: string,
     metadata?: Record<string, string>
   ): Promise<Stripe.PaymentIntent> {
@@ -213,26 +212,6 @@ export class StripeService {
     } catch (error) {
       this.logger.error('Error verificando webhook:', error);
       throw new Error('Webhook signature verification failed');
-    }
-  }
-
-  // Obtener método de pago por defecto
-  public async getDefaultPaymentMethod(customerId: string): Promise<Stripe.PaymentMethod | null> {
-    try {
-      const customer = await this.stripe.customers.retrieve(customerId) as Stripe.Customer;
-      
-      if (customer.invoice_settings?.default_payment_method) {
-        const paymentMethod = await this.stripe.paymentMethods.retrieve(
-          customer.invoice_settings.default_payment_method as string
-        );
-        return paymentMethod;
-      }
-
-      return null;
-
-    } catch (error) {
-      this.logger.error('Error obteniendo método de pago:', error);
-      return null;
     }
   }
 

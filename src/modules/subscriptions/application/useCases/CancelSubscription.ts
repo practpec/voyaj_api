@@ -1,19 +1,18 @@
 // src/modules/subscriptions/application/useCases/CancelSubscription.ts
 import { ISubscriptionRepository } from '../../domain/interfaces/ISubscriptionRepository';
+import { IPlanRepository } from '../../domain/interfaces/IPlanRepository';
 import { StripeService } from '../../infrastructure/services/StripeService';
+import { SubscriptionEvents } from '../../domain/SubscriptionEvents';
+import { EventBus } from '../../../../shared/events/EventBus';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
-
-export interface CancelSubscriptionDTO {
-  userId: string;
-  cancelImmediately?: boolean;
-  reason?: string;
-}
+import { CancelSubscriptionDTO } from '../dtos/SubscriptionDTO';
 
 export class CancelSubscriptionUseCase {
   constructor(
     private subscriptionRepository: ISubscriptionRepository,
     private stripeService: StripeService,
+    private eventBus: EventBus,
     private logger: LoggerService
   ) {}
 
@@ -33,28 +32,29 @@ export class CancelSubscriptionUseCase {
         throw new Error('La suscripción ya está cancelada');
       }
 
-      // Si es plan gratuito, cancelar directamente
-      if (subscription.plan === 'EXPLORADOR') {
-        subscription.cancel(true);
-        await this.subscriptionRepository.update(subscription);
-        
-        this.logger.info(`Suscripción gratuita cancelada para usuario: ${dto.userId}`);
-        return;
-      }
-
       // Para planes pagos, cancelar en Stripe
-      if (!subscription.stripeSubscriptionId) {
-        throw new Error('Suscripción sin ID de Stripe válido');
+      if (subscription.stripeSubscriptionId) {
+        await this.stripeService.cancelSubscription(
+          subscription.stripeSubscriptionId,
+          !dto.cancelImmediately
+        );
       }
-
-      await this.stripeService.cancelSubscription(
-        subscription.stripeSubscriptionId,
-        !dto.cancelImmediately
-      );
 
       // Actualizar suscripción local
       subscription.cancel(!dto.cancelImmediately);
       await this.subscriptionRepository.update(subscription);
+
+      // Publicar evento
+      const event = SubscriptionEvents.subscriptionCanceled({
+        subscriptionId: subscription.id,
+        userId: subscription.userId,
+        planCode: 'PLAN_CODE', // Necesitaríamos obtener el plan para esto
+        canceledAt: new Date(),
+        cancelAtPeriodEnd: !dto.cancelImmediately,
+        reason: dto.reason
+      });
+
+      await this.eventBus.publishTripEvent(event.eventType, subscription.id, event.eventData);
 
       this.logger.info(`Suscripción cancelada para usuario: ${dto.userId}, inmediata: ${dto.cancelImmediately}`);
 

@@ -1,12 +1,13 @@
 // src/modules/subscriptions/domain/Subscription.ts
 import { SecurityUtils } from '../../../shared/utils/SecurityUtils';
-import { PLANS, PLAN_LIMITS, SUBSCRIPTION_STATUS } from '../../../shared/constants/paymentConstants';
+
+export type SubscriptionStatus = 'ACTIVE' | 'INACTIVE' | 'CANCELED' | 'PAST_DUE' | 'TRIALING';
 
 export interface SubscriptionData {
   id: string;
   userId: string;
-  plan: keyof typeof PLANS;
-  status: keyof typeof SUBSCRIPTION_STATUS;
+  planId: string;
+  status: SubscriptionStatus;
   stripeSubscriptionId?: string;
   stripeCustomerId?: string;
   priceId?: string;
@@ -22,7 +23,7 @@ export interface SubscriptionData {
 }
 
 export class Subscription {
-  public data: SubscriptionData;
+  private data: SubscriptionData;
 
   constructor(subscriptionData: SubscriptionData) {
     this.data = { ...subscriptionData };
@@ -38,11 +39,11 @@ export class Subscription {
     return this.data.userId;
   }
 
-  public get plan(): keyof typeof PLANS {
-    return this.data.plan;
+  public get planId(): string {
+    return this.data.planId;
   }
 
-  public get status(): keyof typeof SUBSCRIPTION_STATUS {
+  public get status(): SubscriptionStatus {
     return this.data.status;
   }
 
@@ -74,14 +75,10 @@ export class Subscription {
            this.data.trialEnd > new Date();
   }
 
-  public get planLimits() {
-    return PLAN_LIMITS[this.data.plan];
-  }
-
   // Crear nueva suscripción
   public static create(
     userId: string,
-    plan: keyof typeof PLANS,
+    planId: string,
     stripeData?: {
       subscriptionId: string;
       customerId: string;
@@ -96,13 +93,13 @@ export class Subscription {
     const subscriptionData: SubscriptionData = {
       id: subscriptionId,
       userId,
-      plan,
-      status: plan === 'EXPLORADOR' ? 'ACTIVE' : 'INACTIVE',
+      planId,
+      status: 'INACTIVE',
       stripeSubscriptionId: stripeData?.subscriptionId,
       stripeCustomerId: stripeData?.customerId,
       priceId: stripeData?.priceId,
       currentPeriodStart: now,
-      currentPeriodEnd: plan === 'EXPLORADOR' ? new Date('2099-12-31') : nextMonth,
+      currentPeriodEnd: nextMonth,
       cancelAtPeriodEnd: false,
       createdAt: now
     };
@@ -136,15 +133,15 @@ export class Subscription {
   }
 
   // Cambiar plan
-  public changePlan(newPlan: keyof typeof PLANS, priceId?: string): void {
-    this.data.plan = newPlan;
+  public changePlan(newPlanId: string, priceId?: string): void {
+    this.data.planId = newPlanId;
     this.data.priceId = priceId;
     this.data.updatedAt = new Date();
   }
 
   // Actualizar desde webhook de Stripe
   public updateFromStripe(stripeData: {
-    status: keyof typeof SUBSCRIPTION_STATUS;
+    status: SubscriptionStatus;
     currentPeriodStart: Date;
     currentPeriodEnd: Date;
     cancelAtPeriodEnd?: boolean;
@@ -170,35 +167,6 @@ export class Subscription {
     this.data.updatedAt = new Date();
   }
 
-  // Verificar si puede acceder a una característica
-  public canAccess(feature: string): boolean {
-    if (!this.isActive && this.data.plan !== 'EXPLORADOR') {
-      return false;
-    }
-
-    const limits = this.planLimits;
-    
-    switch (feature) {
-      case 'unlimited_trips':
-        return limits.activeTrips === -1;
-      case 'group_trips':
-        return limits.groupTripParticipants > 0;
-      case 'offline_mode':
-        return limits.offlineMode;
-      case 'export_pdf':
-        return limits.exportFormats.includes('pdf');
-      case 'export_excel':
-        return limits.exportFormats.includes('excel');
-      default:
-        return true;
-    }
-  }
-
-  // Obtener límite específico
-  public getLimit(limitType: keyof typeof PLAN_LIMITS.EXPLORADOR): number | boolean | string[] {
-    return this.planLimits[limitType];
-  }
-
   private validate(): void {
     if (!this.data.id) {
       throw new Error('ID de suscripción requerido');
@@ -208,12 +176,8 @@ export class Subscription {
       throw new Error('ID de usuario requerido');
     }
 
-    if (!Object.values(PLANS).includes(this.data.plan)) {
-      throw new Error('Plan inválido');
-    }
-
-    if (!Object.values(SUBSCRIPTION_STATUS).includes(this.data.status)) {
-      throw new Error('Estado de suscripción inválido');
+    if (!this.data.planId) {
+      throw new Error('ID de plan requerido');
     }
   }
 

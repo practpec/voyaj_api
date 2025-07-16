@@ -1,25 +1,17 @@
 // src/modules/subscriptions/application/useCases/CreateSubscription.ts
 import { ISubscriptionRepository } from '../../domain/interfaces/ISubscriptionRepository';
+import { IPlanRepository } from '../../domain/interfaces/IPlanRepository';
 import { IUserRepository } from '../../../users/domain/interfaces/IUserRepository';
 import { StripeService } from '../../infrastructure/services/StripeService';
 import { Subscription } from '../../domain/Subscription';
+import { SubscriptionEvents } from '../../domain/SubscriptionEvents';
+import { EventBus } from '../../../../shared/events/EventBus';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
-import { PLANS, PLAN_LIMITS } from '../../../../shared/constants/paymentConstants';
-
-export interface CreateSubscriptionDTO {
-  userId: string;
-  plan: keyof typeof PLANS;
-  trialDays?: number;
-}
+import { CreateSubscriptionDTO, SubscriptionResponseDTO } from '../dtos/SubscriptionDTO';
 
 export interface CreateSubscriptionResponse {
-  subscription: {
-    id: string;
-    plan: string;
-    status: string;
-    currentPeriodEnd: Date;
-  };
+  subscription: SubscriptionResponseDTO;
   paymentIntent?: {
     clientSecret: string;
     status: string;
@@ -30,8 +22,10 @@ export interface CreateSubscriptionResponse {
 export class CreateSubscriptionUseCase {
   constructor(
     private subscriptionRepository: ISubscriptionRepository,
+    private planRepository: IPlanRepository,
     private userRepository: IUserRepository,
     private stripeService: StripeService,
+    private eventBus: EventBus,
     private logger: LoggerService
   ) {}
 
@@ -46,6 +40,12 @@ export class CreateSubscriptionUseCase {
         throw ErrorHandler.createUserNotFoundError();
       }
 
+      // Obtener plan
+      const plan = await this.planRepository.findByCode(dto.planCode);
+      if (!plan || !plan.isActive) {
+        throw new Error('Plan no encontrado o no activo');
+      }
+
       // Verificar si ya tiene suscripción activa
       const existingSubscription = await this.subscriptionRepository.findActiveByUserId(dto.userId);
       if (existingSubscription && existingSubscription.isActive) {
@@ -53,12 +53,12 @@ export class CreateSubscriptionUseCase {
       }
 
       // Si es plan gratuito, crear suscripción directamente
-      if (dto.plan === 'EXPLORADOR') {
-        return await this.createFreeSubscription(dto);
+      if (plan.isFree) {
+        return await this.createFreeSubscription(dto, plan);
       }
 
       // Para planes pagos, usar Stripe
-      return await this.createPaidSubscription(dto, user);
+      return await this.createPaidSubscription(dto, user, plan);
 
     } catch (error) {
       this.logger.error(`Error creando suscripción para usuario ${dto.userId}:`, error);
@@ -66,31 +66,48 @@ export class CreateSubscriptionUseCase {
     }
   }
 
-  private async createFreeSubscription(dto: CreateSubscriptionDTO): Promise<CreateSubscriptionResponse> {
+  private async createFreeSubscription(dto: CreateSubscriptionDTO, plan: any): Promise<CreateSubscriptionResponse> {
     // Crear suscripción gratuita
-    const subscription = Subscription.create(dto.userId, dto.plan);
+    const subscription = Subscription.create(dto.userId, plan.id);
+    subscription.activate('', new Date(), new Date('2099-12-31'));
     
     // Guardar en base de datos
     await this.subscriptionRepository.create(subscription);
+
+    // Publicar evento
+    const event = SubscriptionEvents.subscriptionCreated({
+      subscriptionId: subscription.id,
+      userId: subscription.userId,
+      planCode: plan.code,
+      status: subscription.status,
+      createdAt: new Date()
+    });
+
+    await this.eventBus.publishTripEvent(event.eventType, subscription.id, event.eventData);
 
     this.logger.info(`Suscripción gratuita creada para usuario: ${dto.userId}`);
 
     return {
       subscription: {
         id: subscription.id,
-        plan: subscription.plan,
+        userId: subscription.userId,
+        planCode: plan.code,
         status: subscription.status,
-        currentPeriodEnd: subscription.currentPeriodEnd
+        currentPeriodStart: subscription.data.currentPeriodStart,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        cancelAtPeriodEnd: subscription.data.cancelAtPeriodEnd,
+        isActive: subscription.isActive,
+        isCanceled: subscription.isCanceled,
+        isTrialing: subscription.isTrialing,
+        createdAt: subscription.data.createdAt
       },
       requiresPayment: false
     };
   }
 
-  private async createPaidSubscription(dto: CreateSubscriptionDTO, user: any): Promise<CreateSubscriptionResponse> {
-    const planConfig = PLAN_LIMITS[dto.plan];
-    
-    if (!planConfig.priceId) {
-      throw new Error(`Plan ${dto.plan} no tiene precio configurado`);
+  private async createPaidSubscription(dto: CreateSubscriptionDTO, user: any, plan: any): Promise<CreateSubscriptionResponse> {
+    if (!plan.stripePriceIdMonthly) {
+      throw new Error(`Plan ${plan.code} no tiene precio configurado`);
     }
 
     // Crear o obtener customer en Stripe
@@ -103,15 +120,15 @@ export class CreateSubscriptionUseCase {
     // Crear suscripción en Stripe
     const stripeSubscription = await this.stripeService.createSubscription(
       customer.id,
-      planConfig.priceId,
+      plan.stripePriceIdMonthly,
       dto.trialDays
     );
 
     // Crear suscripción en nuestra BD
-    const subscription = Subscription.create(dto.userId, dto.plan, {
+    const subscription = Subscription.create(dto.userId, plan.id, {
       subscriptionId: stripeSubscription.id,
       customerId: customer.id,
-      priceId: planConfig.priceId
+      priceId: plan.stripePriceIdMonthly
     });
 
     // Actualizar estado basado en Stripe
@@ -120,15 +137,36 @@ export class CreateSubscriptionUseCase {
     // Guardar en base de datos
     await this.subscriptionRepository.create(subscription);
 
-    this.logger.info(`Suscripción paga creada para usuario: ${dto.userId}, plan: ${dto.plan}`);
+    // Publicar evento
+    const event = SubscriptionEvents.subscriptionCreated({
+      subscriptionId: subscription.id,
+      userId: subscription.userId,
+      planCode: plan.code,
+      status: subscription.status,
+      createdAt: new Date(),
+      stripeSubscriptionId: stripeSubscription.id
+    });
+
+    await this.eventBus.publishTripEvent(event.eventType, subscription.id, event.eventData);
+
+    this.logger.info(`Suscripción paga creada para usuario: ${dto.userId}, plan: ${plan.code}`);
 
     // Preparar respuesta
     const response: CreateSubscriptionResponse = {
       subscription: {
         id: subscription.id,
-        plan: subscription.plan,
+        userId: subscription.userId,
+        planCode: plan.code,
         status: subscription.status,
-        currentPeriodEnd: subscription.currentPeriodEnd
+        currentPeriodStart: subscription.data.currentPeriodStart,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        cancelAtPeriodEnd: subscription.data.cancelAtPeriodEnd,
+        isActive: subscription.isActive,
+        isCanceled: subscription.isCanceled,
+        isTrialing: subscription.isTrialing,
+        stripeSubscriptionId: subscription.stripeSubscriptionId,
+        stripeCustomerId: subscription.stripeCustomerId,
+        createdAt: subscription.data.createdAt
       },
       requiresPayment: true
     };
@@ -162,7 +200,7 @@ export class CreateSubscriptionUseCase {
     });
   }
 
-  private mapStripeStatus(stripeStatus: string): keyof typeof import('../../../../shared/constants/paymentConstants').SUBSCRIPTION_STATUS {
+  private mapStripeStatus(stripeStatus: string): any {
     switch (stripeStatus) {
       case 'active':
         return 'ACTIVE';
@@ -183,8 +221,8 @@ export class CreateSubscriptionUseCase {
       throw ErrorHandler.createValidationError('ID de usuario requerido');
     }
 
-    if (!Object.values(PLANS).includes(dto.plan)) {
-      throw ErrorHandler.createValidationError('Plan inválido');
+    if (!dto.planCode) {
+      throw ErrorHandler.createValidationError('Código de plan requerido');
     }
 
     if (dto.trialDays && (dto.trialDays < 0 || dto.trialDays > 30)) {
