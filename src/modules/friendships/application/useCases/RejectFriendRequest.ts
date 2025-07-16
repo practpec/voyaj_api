@@ -51,7 +51,7 @@ export class RejectFriendRequestUseCase {
 
     } catch (error) {
       this.logger.error(`Error rechazando solicitud de amistad ${friendshipId}:`, error);
-      throw ErrorHandler.createInternalServerError('Error rechazando solicitud de amistad');
+      throw new Error('Error rechazando solicitud de amistad');
     }
   }
 }

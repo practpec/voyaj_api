@@ -65,7 +65,7 @@ export class GetUserFriendsUseCase {
 
     } catch (error) {
       this.logger.error(`Error obteniendo amigos del usuario ${userId}:`, error);
-      throw ErrorHandler.createInternalServerError('Error obteniendo lista de amigos');
+      throw new Error('Error obteniendo lista de amigos');
     }
   }
 }

@@ -70,7 +70,7 @@ export class GetFriendRequestsUseCase {
 
     } catch (error) {
       this.logger.error(`Error obteniendo solicitudes de amistad ${type} del usuario ${userId}:`, error);
-      throw ErrorHandler.createInternalServerError('Error obteniendo solicitudes de amistad');
+      throw new Error('Error obteniendo solicitudes de amistad');
     }
   }
 }

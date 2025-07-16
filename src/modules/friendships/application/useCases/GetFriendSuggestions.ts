@@ -57,8 +57,12 @@ export class GetFriendSuggestionsUseCase {
 
       // Filtrar resultados nulos y ordenar por amigos en común
       const validSuggestions = suggestionsData
-        .filter(suggestion => suggestion !== null) as FriendSuggestionDTO[]
-        .sort((a, b) => b.mutualFriendsCount - a.mutualFriendsCount);
+        .filter((suggestion): suggestion is FriendSuggestionDTO => suggestion !== null);
+      
+      // Ordenar por amigos en común
+      validSuggestions.sort((a: FriendSuggestionDTO, b: FriendSuggestionDTO) => 
+        b.mutualFriendsCount - a.mutualFriendsCount
+      );
 
       this.logger.info(`Sugerencias de amigos obtenidas para usuario ${userId}`, {
         userId,
@@ -69,7 +73,7 @@ export class GetFriendSuggestionsUseCase {
 
     } catch (error) {
       this.logger.error(`Error obteniendo sugerencias de amigos para usuario ${userId}:`, error);
-      throw ErrorHandler.createInternalServerError('Error obteniendo sugerencias de amigos');
+      throw new Error('Error obteniendo sugerencias de amigos');
     }
   }
 }

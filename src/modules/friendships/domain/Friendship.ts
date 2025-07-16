@@ -129,9 +129,15 @@ export class Friendship {
     };
   }
 
-  public toPublicData(): Omit<FriendshipData, 'isDeleted'> {
-    const data = this.toData();
-    const { isDeleted, ...publicData } = data;
-    return publicData;
+  public toPublicData(): FriendshipData {
+    return {
+      id: this.id,
+      userId: this.userId,
+      friendId: this.friendId,
+      status: this.status,
+      createdAt: this.createdAt,
+      acceptedAt: this.acceptedAt,
+      isDeleted: this.isDeleted
+    };
   }
 }

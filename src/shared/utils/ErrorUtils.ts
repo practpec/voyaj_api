@@ -1,3 +1,4 @@
+// src/shared/utils/ErrorUtils.ts - ARCHIVO COMPLETO CORREGIDO
 import { ERROR_CODES } from '../constants';
 import { LoggerService } from '../services/LoggerService';
 
@@ -135,6 +136,11 @@ export class ErrorHandler {
     return new NotFoundError('Usuario no encontrado', ERROR_CODES.USER_NOT_FOUND);
   }
 
+  // MÉTODO FALTANTE AGREGADO
+  public static createNotFoundError(message: string = 'Recurso no encontrado', errorCode: string = ERROR_CODES.NOT_FOUND): NotFoundError {
+    return new NotFoundError(message, errorCode);
+  }
+
   public static createUserExistsError(): ConflictError {
     return new ConflictError('El usuario ya existe', ERROR_CODES.USER_ALREADY_EXISTS);
   }
@@ -189,5 +195,13 @@ export class ErrorHandler {
 
   public static createRateLimitError(message?: string): RateLimitError {
     return new RateLimitError(message);
+  }
+
+  public static createConflictError(message: string = 'Conflicto de recursos', details?: any): ConflictError {
+    return new ConflictError(message, details);
+  }
+
+  public static createInternalServerError(message: string = 'Error interno del servidor', details?: any): InternalServerError {
+    return new InternalServerError(message, details);
   }
 }

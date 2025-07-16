@@ -179,3 +179,4 @@ export const FRIENDSHIP_LIMITS = {
   MAX_REQUESTS_PER_DAY: 50,
   SUGGESTIONS_LIMIT: 50
 } as const;
+

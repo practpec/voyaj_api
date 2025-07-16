@@ -1,5 +1,5 @@
 // src/modules/friendships/domain/FriendshipEvents.ts
-import { DomainEvent } from '../../../shared/events/DomainEvent';
+import { DomainEvent } from '../../../shared/events/EventBus';
 
 export const FRIENDSHIP_EVENT_TYPES = {
   FRIEND_REQUEST_SENT: 'friendship.request.sent',
@@ -8,58 +8,72 @@ export const FRIENDSHIP_EVENT_TYPES = {
   FRIENDSHIP_REMOVED: 'friendship.removed'
 } as const;
 
-export class FriendRequestSentEvent extends DomainEvent {
-  constructor(
-    public readonly requesterId: string,
-    public readonly recipientId: string,
-    public readonly friendshipId: string
-  ) {
-    super(FRIENDSHIP_EVENT_TYPES.FRIEND_REQUEST_SENT, {
-      requesterId,
-      recipientId,
-      friendshipId
-    });
-  }
+export interface FriendRequestSentEventData {
+  requesterId: string;
+  recipientId: string;
+  friendshipId: string;
 }
 
-export class FriendRequestAcceptedEvent extends DomainEvent {
-  constructor(
-    public readonly requesterId: string,
-    public readonly recipientId: string,
-    public readonly friendshipId: string
-  ) {
-    super(FRIENDSHIP_EVENT_TYPES.FRIEND_REQUEST_ACCEPTED, {
-      requesterId,
-      recipientId,
-      friendshipId
-    });
-  }
+export interface FriendRequestAcceptedEventData {
+  requesterId: string;
+  recipientId: string;
+  friendshipId: string;
 }
 
-export class FriendRequestRejectedEvent extends DomainEvent {
-  constructor(
-    public readonly requesterId: string,
-    public readonly recipientId: string,
-    public readonly friendshipId: string
-  ) {
-    super(FRIENDSHIP_EVENT_TYPES.FRIEND_REQUEST_REJECTED, {
-      requesterId,
-      recipientId,
-      friendshipId
-    });
-  }
+export interface FriendRequestRejectedEventData {
+  requesterId: string;
+  recipientId: string;
+  friendshipId: string;
 }
 
-export class FriendshipRemovedEvent extends DomainEvent {
-  constructor(
-    public readonly userId: string,
-    public readonly friendId: string,
-    public readonly friendshipId: string
-  ) {
-    super(FRIENDSHIP_EVENT_TYPES.FRIENDSHIP_REMOVED, {
-      userId,
-      friendId,
-      friendshipId
-    });
+export interface FriendshipRemovedEventData {
+  userId: string;
+  friendId: string;
+  friendshipId: string;
+}
+
+export class FriendshipEvents {
+  public static friendRequestSent(data: FriendRequestSentEventData): DomainEvent {
+    return {
+      eventType: FRIENDSHIP_EVENT_TYPES.FRIEND_REQUEST_SENT,
+      aggregateId: data.friendshipId,
+      aggregateType: 'Friendship',
+      eventData: data,
+      timestamp: new Date(),
+      userId: data.requesterId
+    };
+  }
+
+  public static friendRequestAccepted(data: FriendRequestAcceptedEventData): DomainEvent {
+    return {
+      eventType: FRIENDSHIP_EVENT_TYPES.FRIEND_REQUEST_ACCEPTED,
+      aggregateId: data.friendshipId,
+      aggregateType: 'Friendship',
+      eventData: data,
+      timestamp: new Date(),
+      userId: data.recipientId
+    };
+  }
+
+  public static friendRequestRejected(data: FriendRequestRejectedEventData): DomainEvent {
+    return {
+      eventType: FRIENDSHIP_EVENT_TYPES.FRIEND_REQUEST_REJECTED,
+      aggregateId: data.friendshipId,
+      aggregateType: 'Friendship',
+      eventData: data,
+      timestamp: new Date(),
+      userId: data.recipientId
+    };
+  }
+
+  public static friendshipRemoved(data: FriendshipRemovedEventData): DomainEvent {
+    return {
+      eventType: FRIENDSHIP_EVENT_TYPES.FRIENDSHIP_REMOVED,
+      aggregateId: data.friendshipId,
+      aggregateType: 'Friendship',
+      eventData: data,
+      timestamp: new Date(),
+      userId: data.userId
+    };
   }
 }

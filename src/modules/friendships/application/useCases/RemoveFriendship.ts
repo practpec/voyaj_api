@@ -51,7 +51,7 @@ export class RemoveFriendshipUseCase {
 
     } catch (error) {
       this.logger.error(`Error eliminando amistad ${friendshipId}:`, error);
-      throw ErrorHandler.createInternalServerError('Error eliminando amistad');
+      throw new Error('Error eliminando amistad');
     }
   }
 }

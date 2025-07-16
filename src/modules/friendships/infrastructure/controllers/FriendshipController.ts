@@ -127,7 +127,7 @@ export class FriendshipController {
       const userId = req.user!.userId;
       const { id } = req.params;
 
-      if (!ValidationUtils.validateUUID(id)) {
+      if (!id || !ValidationUtils.validateUUID(id)) {
         throw ErrorHandler.createValidationError('ID de solicitud inválido');
       }
 
@@ -151,7 +151,7 @@ export class FriendshipController {
       const userId = req.user!.userId;
       const { id } = req.params;
 
-      if (!ValidationUtils.validateUUID(id)) {
+      if (!id || !ValidationUtils.validateUUID(id)) {
         throw ErrorHandler.createValidationError('ID de solicitud inválido');
       }
 
@@ -219,7 +219,7 @@ export class FriendshipController {
       const userId = req.user!.userId;
       const { id } = req.params;
 
-      if (!ValidationUtils.validateUUID(id)) {
+      if (!id || !ValidationUtils.validateUUID(id)) {
         throw ErrorHandler.createValidationError('ID de amistad inválido');
       }
 

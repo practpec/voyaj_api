@@ -141,6 +141,8 @@ class Server {
         documentation: 'https://docs.voyaj.com',
         endpoints: {
           users: '/api/users',
+          friendships: '/api/friendships',
+          subscriptions: '/api/subscriptions',
           health: '/health'
         }
       }, 'Información de la API');
@@ -158,16 +160,47 @@ class Server {
     }
 
     try {
-    this.logger.info('🔄 Cargando rutas de suscripciones...');
-    const { subscriptionRoutes } = require('./modules/subscriptions/infrastructure/routes/subscriptionRoutes');
-    this.app.use('/api/subscriptions', subscriptionRoutes);
-    this.logger.info('✅ Rutas de suscripciones cargadas exitosamente');
-  } catch (error) {
-    this.logger.error('❌ Error cargando rutas de suscripciones:', error);
-    throw new Error(`Error cargando rutas de suscripciones: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.info('🔄 Cargando rutas de suscripciones...');
+      const { subscriptionRoutes } = require('./modules/subscriptions/infrastructure/routes/subscriptionRoutes');
+      this.app.use('/api/subscriptions', subscriptionRoutes);
+      this.logger.info('✅ Rutas de suscripciones cargadas exitosamente');
+    } catch (error) {
+      this.logger.error('❌ Error cargando rutas de suscripciones:', error);
+      throw new Error(`Error cargando rutas de suscripciones: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    // Rutas de amistades
+    try {
+      this.logger.info('🔄 Cargando rutas de amistades...');
+      const { friendshipRoutes } = require('./modules/friendships/infrastructure/routes/friendshipRoutes');
+      this.app.use('/api/friendships', friendshipRoutes);
+      this.logger.info('✅ Rutas de amistades cargadas exitosamente');
+    } catch (error) {
+      this.logger.error('❌ Error cargando rutas de amistades:', error);
+      throw new Error(`Error cargando rutas de amistades: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
-  
+  private async initializeModules(): Promise<void> {
+    this.logger.info('🔄 Inicializando módulos...');
+
+    // Inicializar módulo de suscripciones
+    try {
+      const { SubscriptionModule } = require('./modules/subscriptions');
+      await SubscriptionModule.initialize();
+      this.logger.info('✅ Módulo de suscripciones inicializado');
+    } catch (error) {
+      this.logger.error('❌ Error inicializando módulo de suscripciones:', error);
+    }
+
+    // Inicializar módulo de amistades
+    try {
+      const { FriendshipModule } = require('./modules/friendships');
+      await FriendshipModule.initialize();
+      this.logger.info('✅ Módulo de amistades inicializado');
+    } catch (error) {
+      this.logger.error('❌ Error inicializando módulo de amistades:', error);
+    }
   }
 
   private initializeErrorHandling(): void {
@@ -231,15 +264,18 @@ class Server {
       await dbConnection.connect();
       this.logger.info('✅ Base de datos conectada exitosamente');
       
-      // 3. Inicializar rutas DESPUÉS de la conexión
+      // 3. Inicializar módulos
+      await this.initializeModules();
+      
+      // 4. Inicializar rutas DESPUÉS de la conexión
       this.logger.info('🚧 Inicializando rutas...');
       this.initializeRoutes();
       this.logger.info('✅ Rutas inicializadas exitosamente');
       
-      // 4. Configurar manejo de errores
+      // 5. Configurar manejo de errores
       this.initializeErrorHandling();
       
-      // 5. Iniciar servidor
+      // 6. Iniciar servidor
       this.app.listen(this.port, () => {
         this.logger.info('🎉 ¡Servidor iniciado exitosamente!');
         this.logger.info(`🚀 Puerto: ${this.port}`);
@@ -248,10 +284,19 @@ class Server {
         this.logger.info(`📚 API Info: http://localhost:${this.port}/api`);
         this.logger.info(`💚 Health Check: http://localhost:${this.port}/health`);
         this.logger.info('📋 Endpoints disponibles:');
-        this.logger.info('   • POST /api/users/register');
-        this.logger.info('   • POST /api/users/login');
-        this.logger.info('   • GET  /api/users/profile');
-        this.logger.info('   • GET  /health');
+        this.logger.info('   👤 Usuarios:');
+        this.logger.info('      • POST /api/users/register');
+        this.logger.info('      • POST /api/users/login');
+        this.logger.info('      • GET  /api/users/profile');
+        this.logger.info('   🤝 Amistades:');
+        this.logger.info('      • POST /api/friendships/request');
+        this.logger.info('      • GET  /api/friendships');
+        this.logger.info('      • GET  /api/friendships/suggestions');
+        this.logger.info('   💳 Suscripciones:');
+        this.logger.info('      • GET  /api/subscriptions/current');
+        this.logger.info('      • GET  /api/subscriptions/plans');
+        this.logger.info('   🔧 Sistema:');
+        this.logger.info('      • GET  /health');
       });
     } catch (error) {
       this.logger.error('💥 Error crítico iniciando el servidor:', error);

@@ -41,9 +41,7 @@ export class SendFriendRequestUseCase {
     // Validar que se puede enviar la solicitud
     const canSendRequest = await this.friendshipService.canSendFriendRequest(requesterId, friendId);
     if (!canSendRequest) {
-      throw ErrorHandler.createConflictError(
-        'Ya existe una relación de amistad o solicitud pendiente entre estos usuarios'
-      );
+      throw new Error('Ya existe una relación de amistad o solicitud pendiente entre estos usuarios');
     }
 
     try {
@@ -74,7 +72,7 @@ export class SendFriendRequestUseCase {
 
     } catch (error) {
       this.logger.error(`Error enviando solicitud de amistad: ${requesterId} -> ${friendId}:`, error);
-      throw ErrorHandler.createInternalServerError('Error enviando solicitud de amistad');
+      throw new Error('Error enviando solicitud de amistad');
     }
   }
 }
