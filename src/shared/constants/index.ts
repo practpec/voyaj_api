@@ -171,3 +171,11 @@ export const IMAGE_CONFIG = {
     format: 'webp'
   }
 } as const;
+
+// Límites específicos para amistades
+export const FRIENDSHIP_LIMITS = {
+  MAX_FRIENDS: 5000,
+  MAX_PENDING_REQUESTS: 100,
+  MAX_REQUESTS_PER_DAY: 50,
+  SUGGESTIONS_LIMIT: 50
+} as const;

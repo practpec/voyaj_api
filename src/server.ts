@@ -166,6 +166,8 @@ class Server {
     this.logger.error('❌ Error cargando rutas de suscripciones:', error);
     throw new Error(`Error cargando rutas de suscripciones: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+
+  
   }
 
   private initializeErrorHandling(): void {
