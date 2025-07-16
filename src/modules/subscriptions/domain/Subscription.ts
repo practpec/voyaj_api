@@ -30,7 +30,7 @@ export class Subscription {
     this.validate();
   }
 
-  // Getters
+  // Getters principales
   public get id(): string {
     return this.data.id;
   }
@@ -55,10 +55,39 @@ export class Subscription {
     return this.data.stripeCustomerId;
   }
 
+  public get currentPeriodStart(): Date {
+    return this.data.currentPeriodStart;
+  }
+
   public get currentPeriodEnd(): Date {
     return this.data.currentPeriodEnd;
   }
 
+  public get cancelAtPeriodEnd(): boolean {
+    return this.data.cancelAtPeriodEnd;
+  }
+
+  public get canceledAt(): Date | undefined {
+    return this.data.canceledAt;
+  }
+
+  public get trialStart(): Date | undefined {
+    return this.data.trialStart;
+  }
+
+  public get trialEnd(): Date | undefined {
+    return this.data.trialEnd;
+  }
+
+  public get createdAt(): Date {
+    return this.data.createdAt;
+  }
+
+  public get updatedAt(): Date | undefined {
+    return this.data.updatedAt;
+  }
+
+  // Getters calculados
   public get isActive(): boolean {
     return this.data.status === 'ACTIVE' && 
            this.data.currentPeriodEnd > new Date() &&
@@ -87,7 +116,8 @@ export class Subscription {
   ): Subscription {
     const subscriptionId = SecurityUtils.generateUUID();
     const now = new Date();
-    const nextMonth = new Date(now);,
+    const nextMonth = new Date(now);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
 
     const subscriptionData: SubscriptionData = {
       id: subscriptionId,

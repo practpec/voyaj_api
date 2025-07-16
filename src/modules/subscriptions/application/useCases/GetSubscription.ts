@@ -45,23 +45,23 @@ export class GetSubscriptionUseCase {
         return null;
       }
 
-      // Mapear a DTO de respuesta
+      // Mapear a DTO de respuesta usando los getters públicos
       const response: SubscriptionWithPlanLimits = {
         id: subscription.id,
         userId: subscription.userId,
         planCode: plan.code,
         status: subscription.status,
-        currentPeriodStart: subscription.data.currentPeriodStart,
+        currentPeriodStart: subscription.currentPeriodStart,
         currentPeriodEnd: subscription.currentPeriodEnd,
-        cancelAtPeriodEnd: subscription.data.cancelAtPeriodEnd,
+        cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
         isActive: subscription.isActive,
         isCanceled: subscription.isCanceled,
         isTrialing: subscription.isTrialing,
-        trialEnd: subscription.data.trialEnd,
+        trialEnd: subscription.trialEnd,
         stripeSubscriptionId: subscription.stripeSubscriptionId,
         stripeCustomerId: subscription.stripeCustomerId,
-        createdAt: subscription.data.createdAt,
-        updatedAt: subscription.data.updatedAt,
+        createdAt: subscription.createdAt,
+        updatedAt: subscription.updatedAt,
         planLimits: {
           activeTrips: plan.limits.activeTrips === -1 ? 'Ilimitados' : plan.limits.activeTrips,
           photosPerTrip: plan.limits.photosPerTrip === -1 ? 'Ilimitadas' : plan.limits.photosPerTrip,

@@ -109,9 +109,11 @@ export class ProcessWebhookUseCase {
   }
 
   private async handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
-    if (invoice.subscription) {
+    // Verificar si la factura tiene suscripción asociada
+    const subscriptionId = (invoice as any).subscription;
+    if (subscriptionId && typeof subscriptionId === 'string') {
       const subscription = await this.subscriptionRepository.findByStripeSubscriptionId(
-        invoice.subscription as string
+        subscriptionId
       );
 
       if (subscription) {
@@ -119,8 +121,8 @@ export class ProcessWebhookUseCase {
         if (subscription.status === 'PAST_DUE') {
           subscription.updateFromStripe({
             status: 'ACTIVE',
-            currentPeriodStart: subscription.data.currentPeriodStart,
-            currentPeriodEnd: subscription.data.currentPeriodEnd
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd
           });
           await this.subscriptionRepository.update(subscription);
         }
@@ -129,9 +131,9 @@ export class ProcessWebhookUseCase {
         const event = SubscriptionEvents.paymentSucceeded({
           subscriptionId: subscription.id,
           userId: subscription.userId,
-          amount: invoice.amount_paid,
-          currency: invoice.currency,
-          paidAt: new Date(invoice.created * 1000),
+          amount: invoice.amount_paid || 0,
+          currency: invoice.currency || 'usd',
+          paidAt: new Date((invoice.created || Date.now() / 1000) * 1000),
           invoiceId: invoice.id
         });
 
@@ -143,16 +145,18 @@ export class ProcessWebhookUseCase {
   }
 
   private async handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
-    if (invoice.subscription) {
+    // Verificar si la factura tiene suscripción asociada
+    const subscriptionId = (invoice as any).subscription;
+    if (subscriptionId && typeof subscriptionId === 'string') {
       const subscription = await this.subscriptionRepository.findByStripeSubscriptionId(
-        invoice.subscription as string
+        subscriptionId
       );
 
       if (subscription) {
         subscription.updateFromStripe({
           status: 'PAST_DUE',
-          currentPeriodStart: subscription.data.currentPeriodStart,
-          currentPeriodEnd: subscription.data.currentPeriodEnd
+          currentPeriodStart: subscription.currentPeriodStart,
+          currentPeriodEnd: subscription.currentPeriodEnd
         });
         await this.subscriptionRepository.update(subscription);
 
@@ -160,11 +164,11 @@ export class ProcessWebhookUseCase {
         const event = SubscriptionEvents.paymentFailed({
           subscriptionId: subscription.id,
           userId: subscription.userId,
-          amount: invoice.amount_due,
-          currency: invoice.currency,
-          failedAt: new Date(invoice.created * 1000),
+          amount: invoice.amount_due || 0,
+          currency: invoice.currency || 'usd',
+          failedAt: new Date((invoice.created || Date.now() / 1000) * 1000),
           reason: 'Payment failed',
-          attemptCount: invoice.attempt_count || 1
+          attemptCount: (invoice as any).attempt_count || 1
         });
 
         await this.eventBus.publishTripEvent(event.eventType, subscription.id, event.eventData);
@@ -181,14 +185,14 @@ export class ProcessWebhookUseCase {
 
     if (subscription) {
       // Publicar evento de trial próximo a expirar
-      const daysRemaining = subscription.data.trialEnd ? 
-        Math.ceil((subscription.data.trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+      const daysRemaining = subscription.trialEnd ? 
+        Math.ceil((subscription.trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
 
       const event = SubscriptionEvents.trialEndingSoon({
         subscriptionId: subscription.id,
         userId: subscription.userId,
         planCode: 'PLAN_CODE', // Necesitaríamos obtener el plan
-        trialEndDate: subscription.data.trialEnd!,
+        trialEndDate: subscription.trialEnd!,
         daysRemaining
       });
 
@@ -201,15 +205,18 @@ export class ProcessWebhookUseCase {
   private updateSubscriptionFromStripe(subscription: any, stripeSubscription: Stripe.Subscription): void {
     const status = this.mapStripeStatus(stripeSubscription.status);
     
+    // Usar any para acceder a propiedades que pueden no estar tipadas correctamente
+    const stripeAny = stripeSubscription as any;
+    
     subscription.updateFromStripe({
       status,
-      currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
-      currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
-      cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
-      trialStart: stripeSubscription.trial_start ? 
-        new Date(stripeSubscription.trial_start * 1000) : undefined,
-      trialEnd: stripeSubscription.trial_end ? 
-        new Date(stripeSubscription.trial_end * 1000) : undefined
+      currentPeriodStart: new Date((stripeAny.current_period_start || 0) * 1000),
+      currentPeriodEnd: new Date((stripeAny.current_period_end || 0) * 1000),
+      cancelAtPeriodEnd: stripeAny.cancel_at_period_end || false,
+      trialStart: stripeAny.trial_start ? 
+        new Date(stripeAny.trial_start * 1000) : undefined,
+      trialEnd: stripeAny.trial_end ? 
+        new Date(stripeAny.trial_end * 1000) : undefined
     });
   }
 

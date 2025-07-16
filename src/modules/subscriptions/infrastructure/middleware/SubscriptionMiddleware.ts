@@ -44,6 +44,23 @@ export class SubscriptionMiddleware {
     }
   }
 
+  // Convertir límites string/number a solo números para el middleware
+  private static normalizeLimits(planLimits: any): {
+    activeTrips: number;
+    photosPerTrip: number;
+    groupTripParticipants: number;
+    exportFormats: string[];
+    offlineMode: boolean;
+  } {
+    return {
+      activeTrips: typeof planLimits.activeTrips === 'string' ? -1 : planLimits.activeTrips,
+      photosPerTrip: typeof planLimits.photosPerTrip === 'string' ? -1 : planLimits.photosPerTrip,
+      groupTripParticipants: typeof planLimits.groupTripParticipants === 'string' ? -1 : planLimits.groupTripParticipants,
+      exportFormats: planLimits.exportFormats,
+      offlineMode: planLimits.offlineMode
+    };
+  }
+
   // Middleware para verificar suscripción activa
   public static requireActiveSubscription = async (
     req: Request,
@@ -66,13 +83,13 @@ export class SubscriptionMiddleware {
         return;
       }
 
-      // Agregar información de suscripción al request
+      // Agregar información de suscripción al request con límites normalizados
       req.subscription = {
         id: subscription.id,
         planCode: subscription.planCode,
         status: subscription.status,
         isActive: subscription.isActive,
-        limits: subscription.planLimits
+        limits: this.normalizeLimits(subscription.planLimits)
       };
 
       next();
@@ -108,7 +125,7 @@ export class SubscriptionMiddleware {
           planCode: subscription.planCode,
           status: subscription.status,
           isActive: subscription.isActive,
-          limits: subscription.planLimits
+          limits: this.normalizeLimits(subscription.planLimits)
         };
 
         next();
@@ -139,7 +156,8 @@ export class SubscriptionMiddleware {
         }
 
         // Verificar funcionalidad específica
-        const hasFeature = this.checkFeatureAccess(subscription, feature);
+        const normalizedLimits = this.normalizeLimits(subscription.planLimits);
+        const hasFeature = this.checkFeatureAccess(normalizedLimits, feature);
 
         if (!hasFeature) {
           ResponseUtils.error(res, 403, 'FEATURE_NOT_AVAILABLE', 
@@ -154,7 +172,7 @@ export class SubscriptionMiddleware {
           planCode: subscription.planCode,
           status: subscription.status,
           isActive: subscription.isActive,
-          limits: subscription.planLimits
+          limits: normalizedLimits
         };
 
         next();
@@ -184,7 +202,7 @@ export class SubscriptionMiddleware {
             planCode: subscription.planCode,
             status: subscription.status,
             isActive: subscription.isActive,
-            limits: subscription.planLimits
+            limits: this.normalizeLimits(subscription.planLimits)
           };
         }
       }
@@ -197,16 +215,16 @@ export class SubscriptionMiddleware {
     }
   };
 
-  private static checkFeatureAccess(subscription: any, feature: string): boolean {
+  private static checkFeatureAccess(limits: any, feature: string): boolean {
     switch (feature) {
       case 'groupTrips':
-        return subscription.planLimits.groupTripParticipants > 0;
+        return limits.groupTripParticipants > 0 || limits.groupTripParticipants === -1;
       
       case 'offlineMode':
-        return subscription.planLimits.offlineMode;
+        return limits.offlineMode;
       
       case 'exportFormats':
-        return subscription.planLimits.exportFormats.length > 1;
+        return limits.exportFormats.length > 1;
       
       default:
         return false;

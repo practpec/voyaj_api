@@ -16,7 +16,7 @@ export class StripeService {
     }
 
     this.stripe = new Stripe(secretKey, {
-      apiVersion: '2023-10-16',
+      apiVersion: '2025-06-30.basil',
       typescript: true
     });
 
@@ -40,8 +40,11 @@ export class StripeService {
       });
 
       if (existingCustomers.data.length > 0) {
-        this.logger.info(`Customer existente encontrado para: ${email}`);
-        return existingCustomers.data[0];
+        const customer = existingCustomers.data[0];
+        if (customer && !customer.deleted) {
+          this.logger.info(`Customer existente encontrado para: ${email}`);
+          return customer as Stripe.Customer;
+        }
       }
 
       // Crear nuevo customer
@@ -76,6 +79,9 @@ export class StripeService {
           price: priceId
         }],
         payment_behavior: 'default_incomplete',
+        payment_settings: {
+          save_default_payment_method: 'on_subscription'
+        },
         expand: ['latest_invoice.payment_intent'],
         metadata: {
           platform: 'voyaj'
@@ -104,17 +110,21 @@ export class StripeService {
     cancelAtPeriodEnd: boolean = true
   ): Promise<Stripe.Subscription> {
     try {
-      const subscription = await this.stripe.subscriptions.update(subscriptionId, {
-        cancel_at_period_end: cancelAtPeriodEnd,
-        metadata: {
-          canceled_by: 'user',
-          canceled_at: new Date().toISOString()
-        }
-      });
-
-      this.logger.info(`Suscripción ${cancelAtPeriodEnd ? 'programada para cancelar' : 'cancelada'}: ${subscriptionId}`);
-      return subscription;
-
+      if (cancelAtPeriodEnd) {
+        const subscription = await this.stripe.subscriptions.update(subscriptionId, {
+          cancel_at_period_end: true,
+          metadata: {
+            canceled_by: 'user',
+            canceled_at: new Date().toISOString()
+          }
+        });
+        this.logger.info(`Suscripción programada para cancelar: ${subscriptionId}`);
+        return subscription;
+      } else {
+        const subscription = await this.stripe.subscriptions.cancel(subscriptionId);
+        this.logger.info(`Suscripción cancelada inmediatamente: ${subscriptionId}`);
+        return subscription;
+      }
     } catch (error) {
       this.logger.error('Error cancelando suscripción:', error);
       throw new Error('Error cancelando suscripción');
@@ -238,16 +248,72 @@ export class StripeService {
   // Obtener upcoming invoice
   public async getUpcomingInvoice(customerId: string): Promise<Stripe.Invoice | null> {
     try {
-      const invoice = await this.stripe.invoices.retrieveUpcoming({
-        customer: customerId
+      const invoice = await this.stripe.invoices.list({
+        customer: customerId,
+        status: 'draft',
+        limit: 1
       });
 
-      return invoice;
+      return invoice.data[0] || null;
 
     } catch (error) {
       // Es normal que no haya upcoming invoice
       this.logger.debug('No hay upcoming invoice para customer:', customerId);
       return null;
+    }
+  }
+
+  // Crear sesión de checkout
+  public async createCheckoutSession(
+    customerId: string,
+    priceId: string,
+    successUrl: string,
+    cancelUrl: string,
+    metadata?: Record<string, string>
+  ): Promise<Stripe.Checkout.Session> {
+    try {
+      const session = await this.stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        line_items: [{
+          price: priceId,
+          quantity: 1
+        }],
+        mode: 'subscription',
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+          platform: 'voyaj',
+          ...metadata
+        }
+      });
+
+      this.logger.info(`Checkout session creada: ${session.id}`);
+      return session;
+
+    } catch (error) {
+      this.logger.error('Error creando sesión de checkout:', error);
+      throw new Error('Error creando sesión de pago');
+    }
+  }
+
+  // Crear sesión de portal de facturación
+  public async createBillingPortalSession(
+    customerId: string,
+    returnUrl: string
+  ): Promise<Stripe.BillingPortal.Session> {
+    try {
+      const session = await this.stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl
+      });
+
+      this.logger.info(`Portal de facturación creado para customer: ${customerId}`);
+      return session;
+
+    } catch (error) {
+      this.logger.error('Error creando portal de facturación:', error);
+      throw new Error('Error creando portal de facturación');
     }
   }
 }

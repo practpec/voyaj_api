@@ -50,9 +50,7 @@ export class UpdateSubscriptionUseCase {
 
       // Si es cambio a plan gratuito, cancelar suscripción
       if (newPlan.isFree) {
-        await this.downgradeTo
-
-(newPlan, subscription);
+        await this.downgradeToFree(newPlan, subscription);
         return;
       }
 

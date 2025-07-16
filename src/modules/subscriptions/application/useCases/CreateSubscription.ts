@@ -93,13 +93,13 @@ export class CreateSubscriptionUseCase {
         userId: subscription.userId,
         planCode: plan.code,
         status: subscription.status,
-        currentPeriodStart: subscription.data.currentPeriodStart,
+        currentPeriodStart: subscription.currentPeriodStart,
         currentPeriodEnd: subscription.currentPeriodEnd,
-        cancelAtPeriodEnd: subscription.data.cancelAtPeriodEnd,
+        cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
         isActive: subscription.isActive,
         isCanceled: subscription.isCanceled,
         isTrialing: subscription.isTrialing,
-        createdAt: subscription.data.createdAt
+        createdAt: subscription.createdAt
       },
       requiresPayment: false
     };
@@ -158,15 +158,15 @@ export class CreateSubscriptionUseCase {
         userId: subscription.userId,
         planCode: plan.code,
         status: subscription.status,
-        currentPeriodStart: subscription.data.currentPeriodStart,
+        currentPeriodStart: subscription.currentPeriodStart,
         currentPeriodEnd: subscription.currentPeriodEnd,
-        cancelAtPeriodEnd: subscription.data.cancelAtPeriodEnd,
+        cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
         isActive: subscription.isActive,
         isCanceled: subscription.isCanceled,
         isTrialing: subscription.isTrialing,
         stripeSubscriptionId: subscription.stripeSubscriptionId,
         stripeCustomerId: subscription.stripeCustomerId,
-        createdAt: subscription.data.createdAt
+        createdAt: subscription.createdAt
       },
       requiresPayment: true
     };
