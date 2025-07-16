@@ -1,10 +1,6 @@
 // src/modules/friendships/application/dtos/FriendshipDTO.ts
 import { FriendshipData } from '../../domain/Friendship';
 
-export interface SendFriendRequestDTO {
-  friendId: string;
-}
-
 export interface FriendshipResponseDTO {
   id: string;
   userId: string;

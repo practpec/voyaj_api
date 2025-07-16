@@ -13,6 +13,7 @@ export interface FriendRequestSentEventData {
   requesterId: string;
   recipientId: string;
   friendshipId: string;
+  sentAt: Date;
 }
 
 export interface FriendRequestAcceptedEventData {
@@ -33,19 +34,21 @@ export interface FriendshipRemovedEventData {
   friendshipId: string;
 }
 
-// Clases de eventos que extienden DomainEvent (para ser compatibles con tu código actual)
+// Clases de eventos que extienden DomainEvent
 export class FriendRequestSentEvent extends DomainEvent {
   constructor(
     public readonly requesterId: string,
     public readonly recipientId: string,
-    public readonly friendshipId: string
+    public readonly friendshipId: string,
+    public readonly sentAt: Date
   ) {
     super(
       FRIENDSHIP_EVENT_TYPES.FRIEND_REQUEST_SENT,
       {
         requesterId,
         recipientId,
-        friendshipId
+        friendshipId,
+        sentAt
       },
       friendshipId,
       'Friendship'
@@ -93,7 +96,7 @@ export class FriendRequestRejectedEvent extends DomainEvent {
 
 export class FriendshipRemovedEvent extends DomainEvent {
   constructor(
-    public override readonly userId: string,
+    public readonly userId: string,
     public readonly friendId: string,
     public readonly friendshipId: string
   ) {
@@ -110,21 +113,38 @@ export class FriendshipRemovedEvent extends DomainEvent {
   }
 }
 
-// Factory class para crear eventos (mantengo para compatibilidad)
+// Factory para crear eventos (para mantener compatibilidad con tu código existente)
 export class FriendshipEvents {
   public static friendRequestSent(data: FriendRequestSentEventData): FriendRequestSentEvent {
-    return new FriendRequestSentEvent(data.requesterId, data.recipientId, data.friendshipId);
+    return new FriendRequestSentEvent(
+      data.requesterId,
+      data.recipientId,
+      data.friendshipId,
+      data.sentAt
+    );
   }
 
   public static friendRequestAccepted(data: FriendRequestAcceptedEventData): FriendRequestAcceptedEvent {
-    return new FriendRequestAcceptedEvent(data.requesterId, data.recipientId, data.friendshipId);
+    return new FriendRequestAcceptedEvent(
+      data.requesterId,
+      data.recipientId,
+      data.friendshipId
+    );
   }
 
   public static friendRequestRejected(data: FriendRequestRejectedEventData): FriendRequestRejectedEvent {
-    return new FriendRequestRejectedEvent(data.requesterId, data.recipientId, data.friendshipId);
+    return new FriendRequestRejectedEvent(
+      data.requesterId,
+      data.recipientId,
+      data.friendshipId
+    );
   }
 
   public static friendshipRemoved(data: FriendshipRemovedEventData): FriendshipRemovedEvent {
-    return new FriendshipRemovedEvent(data.userId, data.friendId, data.friendshipId);
+    return new FriendshipRemovedEvent(
+      data.userId,
+      data.friendId,
+      data.friendshipId
+    );
   }
 }

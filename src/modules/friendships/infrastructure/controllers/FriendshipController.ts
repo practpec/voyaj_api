@@ -1,7 +1,7 @@
 // src/modules/friendships/infrastructure/controllers/FriendshipController.ts
 import { Request, Response } from 'express';
 import { ResponseUtils } from '../../../../shared/utils/ResponseUtils';
-import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
+import { ErrorHandler, ValidationError } from '../../../../shared/utils/ErrorUtils';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import { ValidationUtils } from '../../../../shared/utils/ValidationUtils';
 
@@ -13,6 +13,7 @@ import { GetUserFriendsUseCase } from '../../application/useCases/GetUserFriends
 import { GetFriendRequestsUseCase } from '../../application/useCases/GetFriendRequests';
 import { RemoveFriendshipUseCase } from '../../application/useCases/RemoveFriendship';
 import { GetFriendSuggestionsUseCase } from '../../application/useCases/GetFriendSuggestions';
+import { GetFriendshipStatsUseCase } from '../../application/useCases/GetFriendshipStats';
 
 // Services & Repositories
 import { FriendshipMongoRepository } from '../repositories/FriendshipMongoRepository';
@@ -35,6 +36,7 @@ export class FriendshipController {
   private getFriendRequestsUseCase: GetFriendRequestsUseCase;
   private removeFriendshipUseCase: RemoveFriendshipUseCase;
   private getFriendSuggestionsUseCase: GetFriendSuggestionsUseCase;
+  private getFriendshipStatsUseCase: GetFriendshipStatsUseCase;
 
   constructor() {
     this.logger = LoggerService.getInstance();
@@ -93,6 +95,11 @@ export class FriendshipController {
       this.friendshipService,
       this.logger
     );
+
+    this.getFriendshipStatsUseCase = new GetFriendshipStatsUseCase(
+      this.friendshipRepository,
+      this.logger
+    );
   }
 
   // POST /api/friendships/request
@@ -103,11 +110,24 @@ export class FriendshipController {
 
       // Validar datos de entrada
       if (!ValidationUtils.validateUUID(friendId)) {
-        throw ErrorHandler.createValidationError('ID de usuario inválido');
+        const errorResponse = ErrorHandler.handleError(new ValidationError('ID de usuario inválido'));
+        ResponseUtils.error(
+          res,
+          errorResponse.statusCode,
+          errorResponse.errorCode,
+          errorResponse.message,
+          errorResponse.details
+        );
+        return;
       }
 
-      const result = await this.sendFriendRequestUseCase.execute(userId, { friendId });
-      ResponseUtils.success(res, result, 'Solicitud de amistad enviada exitosamente');
+      const dto = {
+        requesterId: userId,
+        recipientId: friendId
+      };
+
+      await this.sendFriendRequestUseCase.execute(dto);
+      ResponseUtils.success(res, null, 'Solicitud de amistad enviada exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
       ResponseUtils.error(
@@ -124,13 +144,21 @@ export class FriendshipController {
   public acceptFriendRequest = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      const { id } = req.params;
+      const { friendshipId } = req.params;
 
-      if (!id || !ValidationUtils.validateUUID(id)) {
-        throw ErrorHandler.createValidationError('ID de solicitud inválido');
+      if (!friendshipId || !ValidationUtils.validateUUID(friendshipId)) {
+        const errorResponse = ErrorHandler.handleError(new ValidationError('ID de solicitud inválido'));
+        ResponseUtils.error(
+          res,
+          errorResponse.statusCode,
+          errorResponse.errorCode,
+          errorResponse.message,
+          errorResponse.details
+        );
+        return;
       }
 
-      const result = await this.acceptFriendRequestUseCase.execute(id, userId);
+      const result = await this.acceptFriendRequestUseCase.execute(friendshipId, userId);
       ResponseUtils.success(res, result, 'Solicitud de amistad aceptada exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
@@ -148,13 +176,21 @@ export class FriendshipController {
   public rejectFriendRequest = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      const { id } = req.params;
+      const { friendshipId } = req.params;
 
-      if (!id || !ValidationUtils.validateUUID(id)) {
-        throw ErrorHandler.createValidationError('ID de solicitud inválido');
+      if (!friendshipId || !ValidationUtils.validateUUID(friendshipId)) {
+        const errorResponse = ErrorHandler.handleError(new ValidationError('ID de solicitud inválido'));
+        ResponseUtils.error(
+          res,
+          errorResponse.statusCode,
+          errorResponse.errorCode,
+          errorResponse.message,
+          errorResponse.details
+        );
+        return;
       }
 
-      await this.rejectFriendRequestUseCase.execute(id, userId);
+      await this.rejectFriendRequestUseCase.execute(friendshipId, userId);
       ResponseUtils.success(res, null, 'Solicitud de amistad rechazada exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
@@ -172,7 +208,7 @@ export class FriendshipController {
   public getUserFriends = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      
+
       const friends = await this.getUserFriendsUseCase.execute(userId);
       ResponseUtils.success(res, friends, 'Lista de amigos obtenida exitosamente');
     } catch (error) {
@@ -187,19 +223,14 @@ export class FriendshipController {
     }
   };
 
-  // GET /api/friendships/requests/received
-  // GET /api/friendships/requests/sent
+  // GET /api/friendships/requests/received o /sent
   public getFriendRequests = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      const type = req.path.includes('received') ? 'received' : 'sent';
-      
+      const type = req.query.type as 'received' | 'sent' || 'received';
+
       const requests = await this.getFriendRequestsUseCase.execute(userId, type);
-      const message = type === 'received' 
-        ? 'Solicitudes recibidas obtenidas exitosamente'
-        : 'Solicitudes enviadas obtenidas exitosamente';
-      
-      ResponseUtils.success(res, requests, message);
+      ResponseUtils.success(res, requests, 'Solicitudes de amistad obtenidas exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
       ResponseUtils.error(
@@ -216,13 +247,21 @@ export class FriendshipController {
   public removeFriendship = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.userId;
-      const { id } = req.params;
+      const { friendshipId } = req.params;
 
-      if (!id || !ValidationUtils.validateUUID(id)) {
-        throw ErrorHandler.createValidationError('ID de amistad inválido');
+      if (!friendshipId || !ValidationUtils.validateUUID(friendshipId)) {
+        const errorResponse = ErrorHandler.handleError(new ValidationError('ID de amistad inválido'));
+        ResponseUtils.error(
+          res,
+          errorResponse.statusCode,
+          errorResponse.errorCode,
+          errorResponse.message,
+          errorResponse.details
+        );
+        return;
       }
 
-      await this.removeFriendshipUseCase.execute(id, userId);
+      await this.removeFriendshipUseCase.execute(friendshipId, userId);
       ResponseUtils.success(res, null, 'Amistad eliminada exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);
@@ -243,7 +282,15 @@ export class FriendshipController {
       const limit = parseInt(req.query.limit as string) || 10;
 
       if (limit > 50) {
-        throw ErrorHandler.createValidationError('El límite máximo es 50 sugerencias');
+        const errorResponse = ErrorHandler.handleError(new ValidationError('El límite máximo es 50 sugerencias'));
+        ResponseUtils.error(
+          res,
+          errorResponse.statusCode,
+          errorResponse.errorCode,
+          errorResponse.message,
+          errorResponse.details
+        );
+        return;
       }
 
       const suggestions = await this.getFriendSuggestionsUseCase.execute(userId, limit);
@@ -265,19 +312,7 @@ export class FriendshipController {
     try {
       const userId = req.user!.userId;
 
-      // Obtener estadísticas básicas
-      const [totalFriends, pendingReceived, pendingSent] = await Promise.all([
-        this.friendshipRepository.countFriendsByUserId(userId),
-        this.friendshipRepository.findPendingRequestsByRecipient(userId),
-        this.friendshipRepository.findPendingRequestsBySender(userId)
-      ]);
-
-      const stats = {
-        totalFriends,
-        pendingRequestsSent: pendingSent.length,
-        pendingRequestsReceived: pendingReceived.length
-      };
-
+      const stats = await this.getFriendshipStatsUseCase.execute(userId);
       ResponseUtils.success(res, stats, 'Estadísticas de amistad obtenidas exitosamente');
     } catch (error) {
       const errorResponse = ErrorHandler.handleError(error as Error);

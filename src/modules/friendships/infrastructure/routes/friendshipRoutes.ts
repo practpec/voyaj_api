@@ -52,17 +52,17 @@ router.post('/request',
 );
 
 // Aceptar solicitud de amistad
-router.post('/:id/accept',
+router.post('/:friendshipId/accept',
   (req, res) => getFriendshipController().acceptFriendRequest(req, res)
 );
 
 // Rechazar solicitud de amistad
-router.post('/:id/reject',
+router.post('/:friendshipId/reject',
   (req, res) => getFriendshipController().rejectFriendRequest(req, res)
 );
 
 // Eliminar amistad
-router.delete('/:id',
+router.delete('/:friendshipId',
   (req, res) => getFriendshipController().removeFriendship(req, res)
 );
 
@@ -77,12 +77,18 @@ router.get('/',
 
 // Obtener solicitudes recibidas
 router.get('/requests/received',
-  (req, res) => getFriendshipController().getFriendRequests(req, res)
+  (req, res) => {
+    req.query.type = 'received';
+    getFriendshipController().getFriendRequests(req, res);
+  }
 );
 
 // Obtener solicitudes enviadas
 router.get('/requests/sent',
-  (req, res) => getFriendshipController().getFriendRequests(req, res)
+  (req, res) => {
+    req.query.type = 'sent';
+    getFriendshipController().getFriendRequests(req, res);
+  }
 );
 
 // Obtener sugerencias de amigos

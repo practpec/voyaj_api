@@ -21,10 +21,11 @@ export { GetUserFriendsUseCase } from './application/useCases/GetUserFriends';
 export { GetFriendRequestsUseCase } from './application/useCases/GetFriendRequests';
 export { RemoveFriendshipUseCase } from './application/useCases/RemoveFriendship';
 export { GetFriendSuggestionsUseCase } from './application/useCases/GetFriendSuggestions';
+export { GetFriendshipStatsUseCase } from './application/useCases/GetFriendshipStats';
 
 // DTOs
+export { SendFriendRequestDTO } from './application/dtos/SendFriendRequestDTO';
 export {
-  SendFriendRequestDTO,
   FriendshipResponseDTO,
   FriendListResponseDTO,
   FriendRequestResponseDTO,
@@ -42,9 +43,14 @@ export { FriendshipEventHandlers } from './infrastructure/events/FriendshipEvent
 // Module configuration
 export class FriendshipModule {
   public static async initialize(): Promise<void> {
-    // Inicializar manejadores de eventos
-    new FriendshipEventHandlers();
-    
-    console.log('✅ Friendship module initialized successfully');
+    try {
+      // Inicializar manejadores de eventos
+      new FriendshipEventHandlers();
+      
+      console.log('✅ Friendship module initialized successfully');
+    } catch (error) {
+      console.error('❌ Error inicializando módulo de amistades:', error);
+      throw error;
+    }
   }
 }

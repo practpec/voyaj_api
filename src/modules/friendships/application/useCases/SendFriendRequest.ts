@@ -2,11 +2,12 @@
 import { IFriendshipRepository } from '../../domain/interfaces/IFriendshipRepository';
 import { IUserRepository } from '../../../users/domain/interfaces/IUserRepository';
 import { FriendshipService } from '../../domain/FriendshipService';
+import { Friendship } from '../../domain/Friendship';
 import { EventBus } from '../../../../shared/events/EventBus';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import { FriendshipEvents } from '../../domain/FriendshipEvents';
 import { ValidationUtils } from '../../../../shared/utils/ValidationUtils';
-import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
+import { ValidationError, NotFoundError, ConflictError } from '../../../../shared/utils/ErrorUtils';
 import { SendFriendRequestDTO } from '../dtos/SendFriendRequestDTO';
 
 export class SendFriendRequestUseCase {
@@ -18,37 +19,41 @@ export class SendFriendRequestUseCase {
     private eventBus: EventBus,
     private logger: LoggerService
   ) {
-    this.friendshipService = new FriendshipService(
-      friendshipRepository,
-      userRepository,
-      eventBus,
-      logger
-    );
+    this.friendshipService = new FriendshipService(friendshipRepository);
   }
 
   public async execute(dto: SendFriendRequestDTO): Promise<void> {
     // Validar datos de entrada
-    const validation = ValidationUtils.validate(
-      ValidationUtils.sendFriendRequestSchema,
-      dto
-    );
+    if (!dto.requesterId || !dto.recipientId) {
+      throw new ValidationError('requesterId y recipientId son requeridos');
+    }
 
-    if (!validation.isValid) {
-      throw ErrorHandler.createValidationError(validation.error!, validation.details);
+    if (dto.requesterId === dto.recipientId) {
+      throw new ValidationError('No puedes enviarte una solicitud de amistad a ti mismo');
     }
 
     try {
-      // Crear la solicitud de amistad usando el servicio de dominio
-      const friendship = await this.friendshipService.sendFriendRequest(
-        dto.requesterId,
-        dto.recipientId
-      );
+      // Verificar si el usuario receptor existe
+      const recipientUser = await this.userRepository.findById(dto.recipientId);
+      if (!recipientUser) {
+        throw new NotFoundError('Usuario destinatario no encontrado');
+      }
+
+      // Verificar si se puede enviar la solicitud
+      const canSend = await this.friendshipService.canSendFriendRequest(dto.requesterId, dto.recipientId);
+      if (!canSend) {
+        throw new ConflictError('Ya existe una amistad o solicitud entre estos usuarios');
+      }
+
+      // Crear la solicitud de amistad
+      const friendship = Friendship.create(dto.requesterId, dto.recipientId);
+      await this.friendshipRepository.create(friendship);
 
       // Publicar evento de solicitud enviada
       const event = FriendshipEvents.friendRequestSent({
         requesterId: dto.requesterId,
         recipientId: dto.recipientId,
-        friendshipId: friendship.id!,
+        friendshipId: friendship.getId(),
         sentAt: new Date()
       });
 
@@ -57,7 +62,7 @@ export class SendFriendRequestUseCase {
       this.logger.info('Solicitud de amistad enviada exitosamente', {
         requesterId: dto.requesterId,
         recipientId: dto.recipientId,
-        friendshipId: friendship.id
+        friendshipId: friendship.getId()
       });
 
     } catch (error) {
