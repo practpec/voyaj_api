@@ -18,6 +18,12 @@ export class FriendshipMongoRepository implements IFriendshipRepository {
     
     this.createIndexes();
   }
+  countPendingRequestsByRecipient(userId: string): Promise<number> {
+    throw new Error('Method not implemented.');
+  }
+  countPendingRequestsBySender(userId: string): Promise<number> {
+    throw new Error('Method not implemented.');
+  }
 
   private async createIndexes(): Promise<void> {
     try {
@@ -277,4 +283,28 @@ export class FriendshipMongoRepository implements IFriendshipRepository {
       throw ErrorHandler.createDatabaseError('Error eliminando amistad', error);
     }
   }
+  // Esta función cuenta las solicitudes de amistad rechazadas por un usuario
+public async countRejectedRequestsByUserId(userId: string): Promise<number> {
+  try {
+    const startTime = Date.now();
+    const count = await this.collection.countDocuments({
+      status: FRIENDSHIP_STATUS.REJECTED,
+      isDeleted: false,
+      $or: [
+        { userId },
+        { friendId: userId }
+      ]
+    });
+    const duration = Date.now() - startTime;
+
+    this.logger.logDatabase('COUNT_REJECTED', 'friendships', duration);
+
+    return count;
+  } catch (error) {
+    this.logger.logDatabase('COUNT_REJECTED', 'friendships', undefined, error);
+    throw ErrorHandler.createDatabaseError('Error contando solicitudes rechazadas', error);
+  }
+}
+
+
 }

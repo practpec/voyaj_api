@@ -1,4 +1,4 @@
-// src/modules/friendships/domain/interfaces/IFriendshipRepository.ts
+// Interfaz del repositorio de amistades
 import { Friendship } from '../Friendship';
 
 export interface IFriendshipRepository {
@@ -13,5 +13,8 @@ export interface IFriendshipRepository {
   findPendingRequestsBySender(senderId: string): Promise<Friendship[]>;
   findSuggestedFriends(userId: string, limit?: number): Promise<any[]>;
   countFriendsByUserId(userId: string): Promise<number>;
+  countPendingRequestsByRecipient(userId: string): Promise<number>;
+  countPendingRequestsBySender(userId: string): Promise<number>;
+  countRejectedRequestsByUserId(userId: string): Promise<number>; // ← añadido
   delete(id: string): Promise<void>;
 }
