@@ -1,5 +1,4 @@
 // src/modules/friendships/infrastructure/events/FriendshipEventHandlers.ts
-import { DomainEvent } from '../../../../shared/events/DomainEvent';
 import { LoggerService } from '../../../../shared/services/LoggerService';
 import { EventBus } from '../../../../shared/events/EventBus';
 import { 

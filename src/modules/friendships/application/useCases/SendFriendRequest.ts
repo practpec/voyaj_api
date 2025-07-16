@@ -1,78 +1,72 @@
 // src/modules/friendships/application/useCases/SendFriendRequest.ts
-import { Friendship } from '../../domain/Friendship';
-import { FriendshipService } from '../../domain/FriendshipService';
 import { IFriendshipRepository } from '../../domain/interfaces/IFriendshipRepository';
 import { IUserRepository } from '../../../users/domain/interfaces/IUserRepository';
+import { FriendshipService } from '../../domain/FriendshipService';
 import { EventBus } from '../../../../shared/events/EventBus';
 import { LoggerService } from '../../../../shared/services/LoggerService';
+import { FriendshipEvents } from '../../domain/FriendshipEvents';
+import { ValidationUtils } from '../../../../shared/utils/ValidationUtils';
 import { ErrorHandler } from '../../../../shared/utils/ErrorUtils';
-import { FriendRequestSentEvent } from '../../domain/FriendshipEvents';
-import { SendFriendRequestDTO, FriendshipResponseDTO, FriendshipDTOMapper } from '../dtos/FriendshipDTO';
+import { SendFriendRequestDTO } from '../dtos/SendFriendRequestDTO';
 
 export class SendFriendRequestUseCase {
-  private logger: LoggerService;
+  private friendshipService: FriendshipService;
 
   constructor(
     private friendshipRepository: IFriendshipRepository,
     private userRepository: IUserRepository,
-    private friendshipService: FriendshipService,
     private eventBus: EventBus,
-    logger: LoggerService
+    private logger: LoggerService
   ) {
-    this.logger = logger;
+    this.friendshipService = new FriendshipService(
+      friendshipRepository,
+      userRepository,
+      eventBus,
+      logger
+    );
   }
 
-  public async execute(
-    requesterId: string, 
-    dto: SendFriendRequestDTO
-  ): Promise<FriendshipResponseDTO> {
-    const { friendId } = dto;
+  public async execute(dto: SendFriendRequestDTO): Promise<void> {
+    // Validar datos de entrada
+    const validation = ValidationUtils.validate(
+      ValidationUtils.sendFriendRequestSchema,
+      dto
+    );
 
-    // Validar que el usuario destinatario existe
-    const friendUser = await this.userRepository.findById(friendId);
-    if (!friendUser) {
-      throw ErrorHandler.createUserNotFoundError();
-    }
-
-    if (friendUser.isDeleted) {
-      throw ErrorHandler.createUserDeletedError();
-    }
-
-    // Validar que se puede enviar la solicitud
-    const canSendRequest = await this.friendshipService.canSendFriendRequest(requesterId, friendId);
-    if (!canSendRequest) {
-      throw new Error('Ya existe una relación de amistad o solicitud pendiente entre estos usuarios');
+    if (!validation.isValid) {
+      throw ErrorHandler.createValidationError(validation.error!, validation.details);
     }
 
     try {
-      // Crear la nueva solicitud de amistad
-      const friendship = Friendship.create(requesterId, friendId);
-      
-      // Guardar en el repositorio
-      await this.friendshipRepository.create(friendship);
-
-      // Emitir evento de dominio
-      const event = new FriendRequestSentEvent(requesterId, friendId, friendship.getId());
-      await this.eventBus.publish(event);
-
-      this.logger.info(`Solicitud de amistad enviada: ${requesterId} -> ${friendId}`, {
-        friendshipId: friendship.getId(),
-        requesterId,
-        friendId
-      });
-
-      // Obtener información del usuario solicitante para la respuesta
-      const requesterUser = await this.userRepository.findById(requesterId);
-      
-      return FriendshipDTOMapper.toFriendshipResponse(
-        friendship.toPublicData(),
-        requesterUser?.toPublicData(),
-        friendUser.toPublicData()
+      // Crear la solicitud de amistad usando el servicio de dominio
+      const friendship = await this.friendshipService.sendFriendRequest(
+        dto.requesterId,
+        dto.recipientId
       );
 
+      // Publicar evento de solicitud enviada
+      const event = FriendshipEvents.friendRequestSent({
+        requesterId: dto.requesterId,
+        recipientId: dto.recipientId,
+        friendshipId: friendship.id!,
+        sentAt: new Date()
+      });
+
+      await this.eventBus.publish(event);
+
+      this.logger.info('Solicitud de amistad enviada exitosamente', {
+        requesterId: dto.requesterId,
+        recipientId: dto.recipientId,
+        friendshipId: friendship.id
+      });
+
     } catch (error) {
-      this.logger.error(`Error enviando solicitud de amistad: ${requesterId} -> ${friendId}:`, error);
-      throw new Error('Error enviando solicitud de amistad');
+      this.logger.error('Error enviando solicitud de amistad:', {
+        error,
+        requesterId: dto.requesterId,
+        recipientId: dto.recipientId
+      });
+      throw error;
     }
   }
 }

@@ -47,7 +47,6 @@ export class FriendshipController {
     this.sendFriendRequestUseCase = new SendFriendRequestUseCase(
       this.friendshipRepository,
       this.userRepository,
-      this.friendshipService,
       this.eventBus,
       this.logger
     );

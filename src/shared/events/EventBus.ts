@@ -1,15 +1,7 @@
+// src/shared/events/EventBus.ts
 import { EventEmitter } from 'events';
 import { LoggerService } from '../services/LoggerService';
-
-export interface DomainEvent {
-  eventType: string;
-  aggregateId: string;
-  aggregateType: string;
-  eventData: any;
-  timestamp: Date;
-  userId?: string;
-  metadata?: Record<string, any>;
-}
+import { DomainEvent } from './DomainEvent';
 
 export type EventHandler<T = any> = (event: DomainEvent & { eventData: T }) => Promise<void> | void;
 
@@ -33,23 +25,32 @@ export class EventBus {
     return EventBus.instance;
   }
 
-  // Publicar un evento
-  public async publish(event: DomainEvent): Promise<void> {
+  // Publicar un evento - ahora acepta tanto DomainEvent como objetos planos
+  public async publish(event: DomainEvent | any): Promise<void> {
     try {
-      this.logger.debug(`Publishing event: ${event.eventType}`, {
+      // Si es una instancia de DomainEvent, usar sus propiedades
+      const eventToPublish = event instanceof DomainEvent ? {
+        eventType: event.eventType,
         aggregateId: event.aggregateId,
         aggregateType: event.aggregateType,
+        eventData: event.eventData,
         timestamp: event.timestamp
+      } : event;
+
+      this.logger.debug(`Publishing event: ${eventToPublish.eventType}`, {
+        aggregateId: eventToPublish.aggregateId,
+        aggregateType: eventToPublish.aggregateType,
+        timestamp: eventToPublish.timestamp
       });
 
       // Emitir el evento
-      this.eventEmitter.emit(event.eventType, event);
+      this.eventEmitter.emit(eventToPublish.eventType, eventToPublish);
       
       // También emitir un evento genérico para listeners globales
-      this.eventEmitter.emit('*', event);
+      this.eventEmitter.emit('*', eventToPublish);
 
     } catch (error) {
-      this.logger.error(`Error publishing event ${event.eventType}:`, error);
+      this.logger.error(`Error publishing event:`, error);
       throw error;
     }
   }
@@ -64,7 +65,7 @@ export class EventBus {
       this.handlers.get(eventType)!.push(handler);
 
       // Wrapper para manejar errores
-      const wrappedHandler = async (event: DomainEvent) => {
+      const wrappedHandler = async (event: any) => {
         try {
           await handler(event as DomainEvent & { eventData: T });
         } catch (error) {
@@ -134,7 +135,7 @@ export class EventBus {
     this.logger.info('All event listeners removed');
   }
 
-  // Crear un evento de dominio
+  // Crear un evento de dominio como objeto plano
   public static createEvent(
     eventType: string,
     aggregateId: string,
@@ -142,7 +143,7 @@ export class EventBus {
     eventData: any,
     userId?: string,
     metadata?: Record<string, any>
-  ): DomainEvent {
+  ): any {
     return {
       eventType,
       aggregateId,
