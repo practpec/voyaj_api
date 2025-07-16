@@ -159,15 +159,15 @@ class Server {
       throw new Error(`Error cargando rutas: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
-    try {
-      this.logger.info('🔄 Cargando rutas de suscripciones...');
-      const { subscriptionRoutes } = require('./modules/subscriptions/infrastructure/routes/subscriptionRoutes');
-      this.app.use('/api/subscriptions', subscriptionRoutes);
-      this.logger.info('✅ Rutas de suscripciones cargadas exitosamente');
-    } catch (error) {
-      this.logger.error('❌ Error cargando rutas de suscripciones:', error);
-      throw new Error(`Error cargando rutas de suscripciones: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    // try {
+    //   this.logger.info('🔄 Cargando rutas de suscripciones...');
+    //   const { subscriptionRoutes } = require('./modules/subscriptions/infrastructure/routes/subscriptionRoutes');
+    //   this.app.use('/api/subscriptions', subscriptionRoutes);
+    //   this.logger.info('✅ Rutas de suscripciones cargadas exitosamente');
+    // } catch (error) {
+    //   this.logger.error('❌ Error cargando rutas de suscripciones:', error);
+    //   throw new Error(`Error cargando rutas de suscripciones: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // }
 
     // Rutas de amistades
     try {
@@ -184,14 +184,14 @@ class Server {
   private async initializeModules(): Promise<void> {
     this.logger.info('🔄 Inicializando módulos...');
 
-    // Inicializar módulo de suscripciones
-    try {
-      const { SubscriptionModule } = require('./modules/subscriptions');
-      await SubscriptionModule.initialize();
-      this.logger.info('✅ Módulo de suscripciones inicializado');
-    } catch (error) {
-      this.logger.error('❌ Error inicializando módulo de suscripciones:', error);
-    }
+    // // Inicializar módulo de suscripciones
+    // try {
+    //   const { SubscriptionModule } = require('./modules/subscriptions');
+    //   await SubscriptionModule.initialize();
+    //   this.logger.info('✅ Módulo de suscripciones inicializado');
+    // } catch (error) {
+    //   this.logger.error('❌ Error inicializando módulo de suscripciones:', error);
+    // }
 
     // Inicializar módulo de amistades
     try {

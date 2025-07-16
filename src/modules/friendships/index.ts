@@ -39,6 +39,8 @@ export { FriendshipController } from './infrastructure/controllers/FriendshipCon
 export { FriendshipMongoRepository } from './infrastructure/repositories/FriendshipMongoRepository';
 export { friendshipRoutes } from './infrastructure/routes/friendshipRoutes';
 export { FriendshipEventHandlers } from './infrastructure/events/FriendshipEventHandlers';
+import { FriendshipEventHandlers } from './infrastructure/events/FriendshipEventHandlers';
+// ...existing code...
 
 // Module configuration
 export class FriendshipModule {

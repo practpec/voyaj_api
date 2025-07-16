@@ -59,6 +59,8 @@ export interface FriendshipStatsDTO {
   totalFriends: number;
   pendingRequestsSent: number;
   pendingRequestsReceived: number;
+  totalRequestsSent: number;
+  friendshipRate: number;
 }
 
 export class FriendshipDTOMapper {

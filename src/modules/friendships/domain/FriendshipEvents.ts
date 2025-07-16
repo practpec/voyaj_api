@@ -96,7 +96,7 @@ export class FriendRequestRejectedEvent extends DomainEvent {
 
 export class FriendshipRemovedEvent extends DomainEvent {
   constructor(
-    public readonly userId: string,
+    override readonly userId: string,
     public readonly friendId: string,
     public readonly friendshipId: string
   ) {

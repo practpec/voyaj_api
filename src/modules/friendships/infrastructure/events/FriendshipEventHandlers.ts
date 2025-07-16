@@ -41,13 +41,13 @@ export class FriendshipEventHandlers {
     );
   }
 
-  private async handleFriendRequestSent(event: FriendRequestSentEvent): Promise<void> {
+  private async handleFriendRequestSent(event: any): Promise<void> {
     try {
       this.logger.info('Procesando evento: Solicitud de amistad enviada', {
         eventType: event.eventType,
-        requesterId: event.requesterId,
-        recipientId: event.recipientId,
-        friendshipId: event.friendshipId
+        requesterId: event.eventData.requesterId,
+        recipientId: event.eventData.recipientId,
+        friendshipId: event.eventData.friendshipId
       });
 
       // Aquí se pueden agregar acciones como:
@@ -67,13 +67,13 @@ export class FriendshipEventHandlers {
     }
   }
 
-  private async handleFriendRequestAccepted(event: FriendRequestAcceptedEvent): Promise<void> {
+  private async handleFriendRequestAccepted(event: any): Promise<void> {
     try {
       this.logger.info('Procesando evento: Solicitud de amistad aceptada', {
         eventType: event.eventType,
-        requesterId: event.requesterId,
-        recipientId: event.recipientId,
-        friendshipId: event.friendshipId
+        requesterId: event.eventData.requesterId,
+        recipientId: event.eventData.recipientId,
+        friendshipId: event.eventData.friendshipId
       });
 
       // Aquí se pueden agregar acciones como:
@@ -93,13 +93,13 @@ export class FriendshipEventHandlers {
     }
   }
 
-  private async handleFriendRequestRejected(event: FriendRequestRejectedEvent): Promise<void> {
+  private async handleFriendRequestRejected(event: any): Promise<void> {
     try {
       this.logger.info('Procesando evento: Solicitud de amistad rechazada', {
         eventType: event.eventType,
-        requesterId: event.requesterId,
-        recipientId: event.recipientId,
-        friendshipId: event.friendshipId
+        requesterId: event.eventData.requesterId,
+        recipientId: event.eventData.recipientId,
+        friendshipId: event.eventData.friendshipId
       });
 
       // Aquí se pueden agregar acciones como:
@@ -112,13 +112,13 @@ export class FriendshipEventHandlers {
     }
   }
 
-  private async handleFriendshipRemoved(event: FriendshipRemovedEvent): Promise<void> {
+  private async handleFriendshipRemoved(event: any): Promise<void> {
     try {
       this.logger.info('Procesando evento: Amistad eliminada', {
         eventType: event.eventType,
-        userId: event.userId,
-        friendId: event.friendId,
-        friendshipId: event.friendshipId
+        userId: event.eventData.userId,
+        friendId: event.eventData.friendId,
+        friendshipId: event.eventData.friendshipId
       });
 
       // Aquí se pueden agregar acciones como:
