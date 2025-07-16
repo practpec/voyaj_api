@@ -159,15 +159,15 @@ class Server {
       throw new Error(`Error cargando rutas: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
-    // try {
-    //   this.logger.info('🔄 Cargando rutas de suscripciones...');
-    //   const { subscriptionRoutes } = require('./modules/subscriptions/infrastructure/routes/subscriptionRoutes');
-    //   this.app.use('/api/subscriptions', subscriptionRoutes);
-    //   this.logger.info('✅ Rutas de suscripciones cargadas exitosamente');
-    // } catch (error) {
-    //   this.logger.error('❌ Error cargando rutas de suscripciones:', error);
-    //   throw new Error(`Error cargando rutas de suscripciones: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    // }
+  // try {
+  //   this.logger.info('🔄 Cargando rutas de suscripciones...');
+  //   const { subscriptionRoutes } = require('./modules/subscriptions/infrastructure/routes/subscriptionRoutes');
+  //   this.app.use('/api/subscriptions', subscriptionRoutes);
+  //   this.logger.info('✅ Rutas de suscripciones cargadas exitosamente');
+  // } catch (error) {
+  //   this.logger.error('❌ Error cargando rutas de suscripciones:', error);
+  //   throw new Error(`Error cargando rutas de suscripciones: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  // }
 
     // Rutas de amistades
     try {
@@ -179,12 +179,22 @@ class Server {
       this.logger.error('❌ Error cargando rutas de amistades:', error);
       throw new Error(`Error cargando rutas de amistades: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+
+     try {
+      this.logger.info('🔄 Cargando rutas de viajes...');
+      const { tripRoutes } = require('./modules/trips/infrastructure/routes/tripRoutes');
+      this.app.use('/api/trips', tripRoutes);
+      this.logger.info('✅ Rutas de viajes cargadas exitosamente');
+    } catch (error) {
+      this.logger.error('❌ Error cargando rutas de viajes:', error);
+      throw new Error(`Error cargando rutas de viajes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   private async initializeModules(): Promise<void> {
     this.logger.info('🔄 Inicializando módulos...');
 
-    // // Inicializar módulo de suscripciones
+    // Inicializar módulo de suscripciones
     // try {
     //   const { SubscriptionModule } = require('./modules/subscriptions');
     //   await SubscriptionModule.initialize();
@@ -201,7 +211,20 @@ class Server {
     } catch (error) {
       this.logger.error('❌ Error inicializando módulo de amistades:', error);
     }
+
+    // Inicializar módulo de amistades
+    try {
+      const { FriendshipModule } = require('./modules/trips');
+      await FriendshipModule.initialize();
+      this.logger.info('✅ Módulo de viajes inicializado');
+    } catch (error) {
+      this.logger.error('❌ Error inicializando módulo de viajes:', error);
+    }
+
+    
   }
+
+  
 
   private initializeErrorHandling(): void {
     // Manejo global de errores
