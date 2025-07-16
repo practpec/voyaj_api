@@ -71,8 +71,8 @@ export class Subscription {
 
   public get isTrialing(): boolean {
     return this.data.status === 'TRIALING' &&
-           this.data.trialEnd &&
-           this.data.trialEnd > new Date();
+           !!this.data.trialEnd &&
+           this.data.trialEnd! > new Date();
   }
 
   // Crear nueva suscripción
@@ -87,8 +87,7 @@ export class Subscription {
   ): Subscription {
     const subscriptionId = SecurityUtils.generateUUID();
     const now = new Date();
-    const nextMonth = new Date(now);
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const nextMonth = new Date(now);,
 
     const subscriptionData: SubscriptionData = {
       id: subscriptionId,

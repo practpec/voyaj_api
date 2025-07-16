@@ -145,6 +145,11 @@ export class SubscriptionController extends BaseController {
       const subscriptionId = req.params.id;
       const { newPlanCode } = req.body;
 
+      if (!subscriptionId) {
+        this.badRequest(res, 'ID de suscripción requerido');
+        return;
+      }
+
       await this.updateSubscriptionUseCase.execute({
         subscriptionId,
         newPlanCode,
