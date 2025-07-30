@@ -1,4 +1,89 @@
+# .gitignore para proyecto Voyaj
+
+### Python ###
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+
+# Ignorar virtualenvs
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Ignorar archivos de entorno
 .env
+.env.local
+.env.*
+!.env.example
+
+# Ignorar archivos de configuración sensible
+config.json
 bd.json
+secrets/
+credentials/
+*.key
+*.cert
+
+# Ignorar directorios específicos del proyecto
 voyaj/
 postman/
+postman_collections/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# Archivos temporales
+*.tmp
+*.log
+*.sqlite
+*.db
+*.cache
+*.pid
+*.pid.lock
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+mypy_cache/
+*.cover
+*.mo
+*.pot
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Archivos de desarrollo
+*.sql
+*.dump
