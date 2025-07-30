@@ -3,6 +3,9 @@ from typing import List
 from src.friendships.infrastructure.http.friendships_schemas import SendFriendRequestRequest, RespondFriendRequestRequest, FriendshipInvitationResponse
 from src.friendships.application.send_friend_request import SendFriendRequest
 from src.friendships.application.respond_to_friend_request import RespondToFriendRequest
+from src.friendships.application.list_friends import ListFriends
+from src.friendships.application.remove_friend import RemoveFriend
+from src.auth.infrastructure.http.auth_schemas import UserResponse
 from src.shared.infrastructure.security.authentication import get_current_user_id
 
 router = APIRouter(prefix="/friendships", tags=["friendships"])
@@ -30,5 +33,22 @@ async def respond_to_friend_request(invitation_id: str, request: RespondFriendRe
             accept=request.accept
         )
         return {"message": "Friend request response processed"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.get("/", response_model=List[UserResponse])
+async def list_friends(user_id: str = Depends(get_current_user_id)):
+    try:
+        list_friends_uc = ListFriends()
+        friends = await list_friends_uc.execute(user_id)
+        return [UserResponse(**friend.dict()) for friend in friends]
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.delete("/{friend_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_friend(friend_id: str, user_id: str = Depends(get_current_user_id)):
+    try:
+        remove_friend_uc = RemoveFriend()
+        await remove_friend_uc.execute(user_id, friend_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

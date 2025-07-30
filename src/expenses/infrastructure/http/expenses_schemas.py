@@ -16,6 +16,15 @@ class RegisterExpenseRequest(BaseModel):
     activity_id: Optional[str] = None
     splits: Optional[List[SplitRequest]] = None
 
+class UpdateExpenseRequest(BaseModel):
+   amount: Optional[Decimal] = None
+   description: Optional[str] = None
+   date: Optional[date] = None
+   currency: Optional[str] = None
+   category: Optional[str] = None
+   activity_id: Optional[str] = None
+   splits: Optional[List[SplitRequest]] = None
+
 class SplitResponse(BaseModel):
     user_id: str
     amount: Decimal

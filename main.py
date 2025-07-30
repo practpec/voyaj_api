@@ -10,6 +10,7 @@ from src.photos.infrastructure.http.photos_router import router as photos_router
 from src.journal_entries.infrastructure.http.journal_entries_router import router as journal_entries_router
 from src.friendships.infrastructure.http.friendships_router import router as friendships_router
 from src.plan_deviations.infrastructure.http.plan_deviations_router import router as plan_deviations_router
+from src.shared.infrastructure.http.advanced_endpoints_router import router as advanced_enopoints_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -39,6 +40,7 @@ app.include_router(photos_router)
 app.include_router(journal_entries_router)
 app.include_router(friendships_router)
 app.include_router(plan_deviations_router)
+app.include_router(advanced_enopoints_router)
 
 @app.get("/")
 async def root():

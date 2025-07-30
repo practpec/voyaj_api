@@ -1,20 +1,19 @@
-from src.trips.domain.trip import Trip
 from src.trips.infrastructure.persistence.mongo_trip_repository import MongoTripRepository
 
-class GetTripDetails:
+class DeleteTrip:
     def __init__(self):
         self.trip_repository = MongoTripRepository()
 
-    async def execute(self, trip_id: str, user_id: str) -> Trip:
+    async def execute(self, trip_id: str, user_id: str) -> bool:
         trip = await self.trip_repository.find_by_id(trip_id)
         if not trip:
             raise ValueError("Trip not found")
 
-        is_member = any(
-            member.user_id == user_id
+        is_owner = any(
+            member.user_id == user_id and member.role == "owner"
             for member in trip.members
         )
-        if not is_member and not trip.is_public:
-            raise ValueError("User is not authorized to view this trip")
+        if not is_owner:
+            raise ValueError("Only trip owner can delete the trip")
 
-        return trip
+        return await self.trip_repository.delete(trip_id)

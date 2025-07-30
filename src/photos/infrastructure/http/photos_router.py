@@ -3,6 +3,8 @@ from typing import List
 from src.photos.infrastructure.http.photos_schemas import UploadPhotoRequest, PhotoResponse
 from src.photos.application.upload_photo_metadata import UploadPhotoMetadata
 from src.photos.application.list_trip_photos import ListTripPhotos
+from src.photos.application.get_photo_details import GetPhotoDetails
+from src.photos.application.delete_photo import DeletePhoto
 from src.shared.infrastructure.security.authentication import get_current_user_id
 
 router = APIRouter(prefix="/trips/{trip_id}/photos", tags=["photos"])
@@ -30,5 +32,22 @@ async def list_trip_photos(trip_id: str, user_id: str = Depends(get_current_user
         list_photos = ListTripPhotos()
         photos = await list_photos.execute(trip_id, user_id)
         return [PhotoResponse(**photo.dict()) for photo in photos]
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.get("/{photo_id}", response_model=PhotoResponse)
+async def get_photo_details(trip_id: str, photo_id: str, user_id: str = Depends(get_current_user_id)):
+    try:
+        get_photo_uc = GetPhotoDetails()
+        photo = await get_photo_uc.execute(photo_id, user_id)
+        return PhotoResponse(**photo.dict())
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@router.delete("/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_photo(trip_id: str, photo_id: str, user_id: str = Depends(get_current_user_id)):
+    try:
+        delete_photo_uc = DeletePhoto()
+        await delete_photo_uc.execute(photo_id, user_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

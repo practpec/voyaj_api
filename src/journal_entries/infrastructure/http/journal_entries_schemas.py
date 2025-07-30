@@ -12,6 +12,11 @@ class CreateJournalEntryRequest(BaseModel):
     emotions: Optional[Dict[str, Any]] = None
     recommendations: Optional[List[RecommendationRequest]] = None
 
+class UpdateJournalEntryRequest(BaseModel):
+    content: Optional[str] = None
+    emotions: Optional[Dict[str, Any]] = None
+    recommendations: Optional[List[RecommendationRequest]] = None
+
 class RecommendationResponse(BaseModel):
     note: str
     type: str

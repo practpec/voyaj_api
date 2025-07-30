@@ -11,6 +11,33 @@ class CreateTripRequest(BaseModel):
     estimated_total_budget: Optional[Decimal] = None
     is_public: bool = False
 
+class UpdateTripRequest(BaseModel):
+    title: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    base_currency: Optional[str] = None
+    estimated_total_budget: Optional[Decimal] = None
+    is_public: Optional[bool] = None
+    cover_image_url: Optional[str] = None
+
+class CreateActivityRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    location: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    estimated_cost: Optional[Decimal] = None
+    order: int = 0
+
+class UpdateActivityRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    estimated_cost: Optional[Decimal] = None
+    order: Optional[int] = None
+
 class InviteMemberRequest(BaseModel):
     invited_user_id: str
     role: str = "viewer"
