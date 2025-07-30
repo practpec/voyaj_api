@@ -11,6 +11,18 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+class VerifyEmailRequest(BaseModel):
+    email: EmailStr
+    token: str
+
+class SendPasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    token: str
+    new_password: str
+
 class FriendResponse(BaseModel):
     user_id: str
     friendship_date: datetime
@@ -26,6 +38,7 @@ class UserProfileResponse(BaseModel):
     email: str
     name: str
     profile_photo_url: Optional[str] = None
+    email_verified: bool
     friends: List[FriendResponse] = []
     created_at: datetime
 

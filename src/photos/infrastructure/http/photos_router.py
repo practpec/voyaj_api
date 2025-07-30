@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List
+from fastapi import APIRouter, HTTPException, status, Depends, File, UploadFile, Form
+from typing import List, Optional
+from datetime import datetime
 from src.photos.infrastructure.http.photos_schemas import UploadPhotoRequest, PhotoResponse
 from src.photos.application.upload_photo_metadata import UploadPhotoMetadata
+from src.photos.application.upload_photo_to_cloudinary import UploadPhotoToCloudinary
 from src.photos.application.list_trip_photos import ListTripPhotos
 from src.photos.application.get_photo_details import GetPhotoDetails
 from src.photos.application.delete_photo import DeletePhoto
@@ -10,7 +12,7 @@ from src.shared.infrastructure.security.authentication import get_current_user_i
 router = APIRouter(prefix="/trips/{trip_id}/photos", tags=["photos"])
 
 @router.post("/", response_model=PhotoResponse)
-async def upload_photo(trip_id: str, request: UploadPhotoRequest, user_id: str = Depends(get_current_user_id)):
+async def upload_photo_metadata(trip_id: str, request: UploadPhotoRequest, user_id: str = Depends(get_current_user_id)):
     try:
         upload_photo_uc = UploadPhotoMetadata()
         photo = await upload_photo_uc.execute(
@@ -21,6 +23,37 @@ async def upload_photo(trip_id: str, request: UploadPhotoRequest, user_id: str =
             location=request.location,
             associated_day_id=request.associated_day_id,
             associated_journal_entry_id=request.associated_journal_entry_id
+        )
+        return PhotoResponse(**photo.dict())
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/upload", response_model=PhotoResponse)
+async def upload_photo_file(
+    trip_id: str,
+    file: UploadFile = File(...),
+    location: Optional[str] = Form(None),
+    associated_day_id: Optional[str] = Form(None),
+    associated_journal_entry_id: Optional[str] = Form(None),
+    user_id: str = Depends(get_current_user_id)
+):
+    try:
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise ValueError("File must be an image")
+        
+        file_bytes = await file.read()
+        if len(file_bytes) > 10 * 1024 * 1024:
+            raise ValueError("File size must be less than 10MB")
+        
+        upload_photo_uc = UploadPhotoToCloudinary()
+        photo = await upload_photo_uc.execute(
+            trip_id=trip_id,
+            user_id=user_id,
+            file_bytes=file_bytes,
+            filename=file.filename or "photo.jpg",
+            location=location,
+            associated_day_id=associated_day_id,
+            associated_journal_entry_id=associated_journal_entry_id
         )
         return PhotoResponse(**photo.dict())
     except ValueError as e:
@@ -47,7 +80,7 @@ async def get_photo_details(trip_id: str, photo_id: str, user_id: str = Depends(
 @router.delete("/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_photo(trip_id: str, photo_id: str, user_id: str = Depends(get_current_user_id)):
     try:
-        delete_photo_uc = DeletePhoto()
-        await delete_photo_uc.execute(photo_id, user_id)
+        delete_photo_uc = UploadPhotoToCloudinary()
+        await delete_photo_uc.delete_photo_from_cloudinary(photo_id, user_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
