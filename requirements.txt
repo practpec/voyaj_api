@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 pymongo
 pydantic
+pydantic-settings
 pydantic[email]
 python-jose[cryptography]
 passlib
