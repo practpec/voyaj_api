@@ -24,6 +24,19 @@ async def send_friend_request(request: SendFriendRequestRequest, user_id: str = 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+@router.get("/requests")
+async def get_friendship_requests(user_id: str = Depends(get_current_user_id)) -> Dict[str, List[FriendshipInvitationResponse]]:
+    try:
+        requests_uc = GetFriendshipRequests()
+        requests = await requests_uc.execute(user_id)
+        
+        return {
+            "received": [FriendshipInvitationResponse(**inv.dict()) for inv in requests["received"]],
+            "sent": [FriendshipInvitationResponse(**inv.dict()) for inv in requests["sent"]]
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 @router.post("/requests/{invitation_id}/respond", status_code=status.HTTP_200_OK)
 async def respond_to_friend_request(invitation_id: str, request: RespondFriendRequestRequest, user_id: str = Depends(get_current_user_id)):
     try:
@@ -53,17 +66,3 @@ async def remove_friend(friend_id: str, user_id: str = Depends(get_current_user_
         await remove_friend_uc.execute(user_id, friend_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    
-@router.get("/friendships/requests")
-async def get_friendship_requests(user_id: str = Depends(get_current_user_id)) -> Dict[str, List[FriendshipInvitationResponse]]:
-    try:
-        requests_uc = GetFriendshipRequests()
-        requests = await requests_uc.execute(user_id)
-        
-        return {
-            "received": [FriendshipInvitationResponse(**inv.dict()) for inv in requests["received"]],
-            "sent": [FriendshipInvitationResponse(**inv.dict()) for inv in requests["sent"]]
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    

@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from bson import ObjectId
 from datetime import datetime
 from src.shared.infrastructure.database.mongo_client import get_database
@@ -8,6 +8,22 @@ class MongoJournalEntryRepository:
     def __init__(self):
         self.db = get_database()
         self.collection = self.db.journalEntries
+
+    def _convert_doc_to_journal_entry(self, doc: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert MongoDB document to JournalEntry-compatible dict"""
+        converted = {
+            "id": str(doc["_id"]),
+            "trip_id": str(doc.get("tripId", "")),
+            "day_id": str(doc.get("dayId", "")),
+            "user_id": str(doc.get("userId", "")),
+            "content": doc.get("content", ""),
+            "emotions": doc.get("emotions", {}),
+            "recommendations": doc.get("recommendations", []),
+            "is_deleted": doc.get("isDeleted", False),
+            "created_at": doc.get("createdAt", datetime.utcnow()),
+            "modified_at": doc.get("modifiedAt", datetime.utcnow())
+        }
+        return converted
 
     async def create(self, entry: JournalEntry) -> JournalEntry:
         entry_dict = entry.dict(exclude={"id"})
@@ -33,11 +49,10 @@ class MongoJournalEntryRepository:
         return entry
 
     async def find_by_id(self, entry_id: str) -> Optional[JournalEntry]:
-        doc = await self.collection.find_one({"_id": ObjectId(entry_id), "isDeleted": {"$ne": True}})
+        doc: Optional[Dict[str, Any]] = await self.collection.find_one({"_id": ObjectId(entry_id), "isDeleted": {"$ne": True}})
         if doc:
-            doc["id"] = str(doc["_id"])
-            del doc["_id"]
-            return JournalEntry(**doc)
+            converted = self._convert_doc_to_journal_entry(doc)
+            return JournalEntry(**converted)
         return None
 
     async def find_by_trip_id(self, trip_id: str) -> List[JournalEntry]:
@@ -48,26 +63,8 @@ class MongoJournalEntryRepository:
         
         entries = []
         async for doc in cursor:
-            doc["id"] = str(doc["_id"])
-            doc["trip_id"] = str(doc.get("tripId"))
-            doc["day_id"] = str(doc.get("dayId"))
-            doc["user_id"] = str(doc.get("userId"))
-            doc["created_at"] = doc.get("createdAt")
-            doc["modified_at"] = doc.get("modifiedAt")
-            
-            del doc["_id"]
-            if "tripId" in doc:
-                del doc["tripId"]
-            if "dayId" in doc:
-                del doc["dayId"]
-            if "userId" in doc:
-                del doc["userId"]
-            if "createdAt" in doc:
-                del doc["createdAt"]
-            if "modifiedAt" in doc:
-                del doc["modifiedAt"]
-                
-            entries.append(JournalEntry(**doc))
+            converted = self._convert_doc_to_journal_entry(doc)
+            entries.append(JournalEntry(**converted))
         return entries
 
     async def find_by_user_id(self, user_id: str) -> List[JournalEntry]:
@@ -78,9 +75,8 @@ class MongoJournalEntryRepository:
         
         entries = []
         async for doc in cursor:
-            doc["id"] = str(doc["_id"])
-            del doc["_id"]
-            entries.append(JournalEntry(**doc))
+            converted = self._convert_doc_to_journal_entry(doc)
+            entries.append(JournalEntry(**converted))
         return entries
 
     async def find_by_day_id(self, day_id: str) -> List[JournalEntry]:
@@ -91,9 +87,8 @@ class MongoJournalEntryRepository:
         
         entries = []
         async for doc in cursor:
-            doc["id"] = str(doc["_id"])
-            del doc["_id"]
-            entries.append(JournalEntry(**doc))
+            converted = self._convert_doc_to_journal_entry(doc)
+            entries.append(JournalEntry(**converted))
         return entries
 
     async def update(self, entry_id: str, update_data: dict) -> bool:

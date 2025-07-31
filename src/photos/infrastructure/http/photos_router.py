@@ -60,6 +60,20 @@ async def upload_photo_file(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+@router.get("/by-day")
+async def list_photos_by_day(trip_id: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, List[PhotoResponse]]:
+    try:
+        photos_by_day_uc = ListPhotosByDay()
+        photos_by_day = await photos_by_day_uc.execute(trip_id, user_id)
+        
+        result = {}
+        for day_key, photos in photos_by_day.items():
+            result[day_key] = [PhotoResponse(**photo.dict()) for photo in photos]
+        
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 @router.get("/", response_model=List[PhotoResponse])
 async def list_trip_photos(trip_id: str, user_id: str = Depends(get_current_user_id)):
     try:
@@ -83,19 +97,5 @@ async def delete_photo(trip_id: str, photo_id: str, user_id: str = Depends(get_c
     try:
         delete_photo_uc = DeletePhoto()
         await delete_photo_uc.execute(photo_id, user_id)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    
-@router.get("/by-day")
-async def list_photos_by_day(trip_id: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, List[PhotoResponse]]:
-    try:
-        photos_by_day_uc = ListPhotosByDay()
-        photos_by_day = await photos_by_day_uc.execute(trip_id, user_id)
-        
-        result = {}
-        for day_key, photos in photos_by_day.items():
-            result[day_key] = [PhotoResponse(**photo.dict()) for photo in photos]
-        
-        return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

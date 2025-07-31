@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi import APIRouter, File, HTTPException, UploadFile, status, Depends, Query
 from typing import List
 from src.auth.infrastructure.http.auth_schemas import (
     RegisterRequest, LoginRequest, LoginResponse, UserResponse, 
@@ -9,6 +9,7 @@ from src.auth.application.register_user import RegisterUser
 from src.auth.application.login_user import LoginUser
 from src.auth.application.search_users import SearchUsers
 from src.auth.application.get_user_profile import GetUserProfile
+from src.auth.application.upload_profile_photo import UploadProfilePhoto
 from src.auth.application.send_verification_email import SendVerificationEmail
 from src.auth.application.verify_email import VerifyEmail
 from src.auth.application.send_password_reset_email import SendPasswordResetEmail
@@ -97,5 +98,28 @@ async def reset_password(request: ResetPasswordRequest):
         reset_password_uc = ResetPassword()
         await reset_password_uc.execute(request.email, request.token, request.new_password)
         return {"message": "Password reset successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/upload-profile-photo", status_code=status.HTTP_200_OK)
+async def upload_profile_photo(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id)
+):
+    try:
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise ValueError("File must be an image")
+        
+        file_bytes = await file.read()
+        if len(file_bytes) > 5 * 1024 * 1024:
+            raise ValueError("File size must be less than 5MB")
+        
+        upload_photo_uc = UploadProfilePhoto()
+        photo_url = await upload_photo_uc.execute(
+            user_id=user_id,
+            file_bytes=file_bytes,
+            filename=file.filename or "profile.jpg"
+        )
+        return {"profile_photo_url": photo_url}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

@@ -23,6 +23,9 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
+class UpdateProfilePhotoRequest(BaseModel):
+    pass
+
 class FriendResponse(BaseModel):
     user_id: str
     friendship_date: datetime

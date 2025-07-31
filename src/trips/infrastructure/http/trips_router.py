@@ -155,7 +155,7 @@ async def delete_activity(trip_id: str, day_id: str, activity_id: str, user_id: 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     
-@router.get("/trips/{trip_id}/analytics")
+@router.get("/{trip_id}/analytics")
 async def get_trip_analytics(trip_id: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
     try:
         analytics_uc = GetTripAnalytics()
@@ -163,7 +163,7 @@ async def get_trip_analytics(trip_id: str, user_id: str = Depends(get_current_us
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     
-@router.get("/trips/{trip_id}/export")
+@router.get("/{trip_id}/export")
 async def export_trip_data(trip_id: str, user_id: str = Depends(get_current_user_id)):
     try:
         export_uc = ExportTripData()

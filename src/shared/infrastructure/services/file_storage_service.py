@@ -63,6 +63,15 @@ class FileStorageService:
     async def delete_trip_photo(self, trip_id: str, photo_id: str) -> bool:
         public_id = f"voyaj/trips/{trip_id}/{trip_id}_{photo_id}"
         return await self.delete_image(public_id)
+    
+    async def upload_profile_photo(self, file_bytes: bytes, user_id: str) -> Optional[str]:
+        folder = "voyaj/profiles"
+        public_id = f"profile_{user_id}"
+        return await self.upload_image(file_bytes, folder, public_id)
+
+    async def delete_profile_photo(self, user_id: str) -> bool:
+        public_id = f"voyaj/profiles/profile_{user_id}"
+        return await self.delete_image(public_id)
 
     def get_optimized_url(self, public_id: str, width: int = 800, quality: str = "auto") -> str:
         try:

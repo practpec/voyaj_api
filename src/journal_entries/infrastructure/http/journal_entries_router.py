@@ -30,6 +30,19 @@ async def create_journal_entry(trip_id: str, request: CreateJournalEntryRequest,
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+@router.get("/search", response_model=List[JournalEntryResponse])
+async def search_journal_entries(
+    trip_id: str,
+    q: str = Query(..., min_length=2),
+    user_id: str = Depends(get_current_user_id)
+):
+    try:
+        search_uc = SearchEntries()
+        entries = await search_uc.execute(trip_id, user_id, q)
+        return [JournalEntryResponse(**entry.dict()) for entry in entries]
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 @router.get("/", response_model=List[JournalEntryResponse])
 async def list_trip_journal_entries(trip_id: str, user_id: str = Depends(get_current_user_id)):
     try:
@@ -66,18 +79,3 @@ async def update_journal_entry(trip_id: str, entry_id: str, request: UpdateJourn
         return JournalEntryResponse(**entry.dict())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    
-
-@router.get("/search", response_model=List[JournalEntryResponse])
-async def search_journal_entries(
-    trip_id: str,
-    q: str = Query(..., min_length=2),
-    user_id: str = Depends(get_current_user_id)
-):
-    try:
-        search_uc = SearchEntries()
-        entries = await search_uc.execute(trip_id, user_id, q)
-        return [JournalEntryResponse(**entry.dict()) for entry in entries]
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
