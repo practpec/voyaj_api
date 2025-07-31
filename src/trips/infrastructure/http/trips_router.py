@@ -12,7 +12,7 @@ from src.trips.application.get_trip_details import GetTripDetails
 from src.trips.application.update_trip import UpdateTrip
 from src.trips.application.delete_trip import DeleteTrip
 from src.trips.application.invite_member import InviteMember
-from src.shared.application.export_trip_data import ExportTripData
+from src.trips.application.export_trip_data import ExportTripData
 from src.trips.application.respond_to_invitation import RespondToInvitation
 from src.trips.application.manage_trip_activities import ManageTripActivities
 from src.shared.infrastructure.security.authentication import get_current_user_id
