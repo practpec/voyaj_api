@@ -53,11 +53,17 @@ class ManageTripActivities:
             order=order
         )
 
-        update_data = {
-            f"days.{day_index}.activities": trip.days[day_index].activities + [activity.dict()]
-        }
+        activity_dict = activity.dict()
+        if activity_dict.get("estimated_cost"):
+            activity_dict["estimated_cost"] = float(activity_dict["estimated_cost"])
 
-        return await self.trip_repository.update(trip_id, {"$push": update_data})
+        # Usar directamente el método update con $push
+        result = await self.trip_repository.collection.update_one(
+            {"_id": ObjectId(trip_id)},
+            {"$push": {f"days.{day_index}.activities": activity_dict}}
+        )
+        
+        return result.modified_count > 0
 
     async def update_activity(
         self,
@@ -118,7 +124,11 @@ class ManageTripActivities:
             update_fields[f"days.{day_index}.activities.{activity_index}.order"] = order
 
         if update_fields:
-            return await self.trip_repository.update(trip_id, update_fields)
+            result = await self.trip_repository.collection.update_one(
+                {"_id": ObjectId(trip_id)},
+                {"$set": update_fields}
+            )
+            return result.modified_count > 0
         
         return True
 
@@ -151,8 +161,10 @@ class ManageTripActivities:
         if day_index is None:
             raise ValueError("Day not found in trip")
 
-        pull_query = {
-            f"days.{day_index}.activities": {"id": activity_id}
-        }
+        # Usar directamente el método collection con $pull
+        result = await self.trip_repository.collection.update_one(
+            {"_id": ObjectId(trip_id)},
+            {"$pull": {f"days.{day_index}.activities": {"id": activity_id}}}
+        )
 
-        return await self.trip_repository.update(trip_id, {"$pull": pull_query})
+        return result.modified_count > 0

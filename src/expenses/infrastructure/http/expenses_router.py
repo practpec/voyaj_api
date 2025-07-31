@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List
+from datetime import date
+from fastapi import APIRouter, HTTPException, Query, status, Depends
+from typing import Any, Dict, List, Optional
 from src.expenses.infrastructure.http.expenses_schemas import RegisterExpenseRequest, UpdateExpenseRequest, ExpenseResponse
 from src.expenses.application.register_expense import RegisterExpense
 from src.expenses.application.list_trip_expenses import ListTripExpenses
+from src.expenses.application.get_expense_summary import GetExpenseSummary
 from src.expenses.application.update_expense import UpdateExpense
 from src.expenses.application.delete_expense import DeleteExpense
 from src.shared.infrastructure.security.authentication import get_current_user_id
@@ -69,5 +71,19 @@ async def delete_expense(trip_id: str, expense_id: str, user_id: str = Depends(g
     try:
         delete_expense_uc = DeleteExpense()
         await delete_expense_uc.execute(expense_id, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.get("/summary")
+async def get_expense_summary(
+    trip_id: str,
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    category: Optional[str] = Query(None),
+    user_id: str = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    try:
+        summary_uc = GetExpenseSummary()
+        return await summary_uc.execute(trip_id, user_id, start_date, end_date, category)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

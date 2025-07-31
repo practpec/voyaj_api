@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, status, Depends, File, UploadFile, Form
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime
 from src.photos.infrastructure.http.photos_schemas import UploadPhotoRequest, PhotoResponse
 from src.photos.application.upload_photo_metadata import UploadPhotoMetadata
 from src.photos.application.upload_photo_to_cloudinary import UploadPhotoToCloudinary
+from src.photos.application.list_photos_by_day import ListPhotosByDay
 from src.photos.application.list_trip_photos import ListTripPhotos
 from src.photos.application.get_photo_details import GetPhotoDetails
 from src.photos.application.delete_photo import DeletePhoto
@@ -80,7 +81,21 @@ async def get_photo_details(trip_id: str, photo_id: str, user_id: str = Depends(
 @router.delete("/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_photo(trip_id: str, photo_id: str, user_id: str = Depends(get_current_user_id)):
     try:
-        delete_photo_uc = UploadPhotoToCloudinary()
-        await delete_photo_uc.delete_photo_from_cloudinary(photo_id, user_id)
+        delete_photo_uc = DeletePhoto()
+        await delete_photo_uc.execute(photo_id, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    
+@router.get("/by-day")
+async def list_photos_by_day(trip_id: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, List[PhotoResponse]]:
+    try:
+        photos_by_day_uc = ListPhotosByDay()
+        photos_by_day = await photos_by_day_uc.execute(trip_id, user_id)
+        
+        result = {}
+        for day_key, photos in photos_by_day.items():
+            result[day_key] = [PhotoResponse(**photo.dict()) for photo in photos]
+        
+        return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

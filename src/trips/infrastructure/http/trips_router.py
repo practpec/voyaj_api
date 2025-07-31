@@ -1,18 +1,22 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List
+from fastapi.responses import StreamingResponse
+from typing import Any, Dict, List
 from src.trips.infrastructure.http.trips_schemas import (
     CreateTripRequest, UpdateTripRequest, TripResponse, InviteMemberRequest, 
     RespondInvitationRequest, CreateActivityRequest, UpdateActivityRequest
 )
 from src.trips.application.create_trip import CreateTrip
+from src.trips.application.get_trip_analytics import GetTripAnalytics
 from src.trips.application.list_user_trips import ListUserTrips
 from src.trips.application.get_trip_details import GetTripDetails
 from src.trips.application.update_trip import UpdateTrip
 from src.trips.application.delete_trip import DeleteTrip
 from src.trips.application.invite_member import InviteMember
+from src.shared.application.export_trip_data import ExportTripData
 from src.trips.application.respond_to_invitation import RespondToInvitation
 from src.trips.application.manage_trip_activities import ManageTripActivities
 from src.shared.infrastructure.security.authentication import get_current_user_id
+import io
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -148,5 +152,27 @@ async def delete_activity(trip_id: str, day_id: str, activity_id: str, user_id: 
     try:
         manage_activities = ManageTripActivities()
         await manage_activities.delete_activity(trip_id, day_id, activity_id, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    
+@router.get("/trips/{trip_id}/analytics")
+async def get_trip_analytics(trip_id: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
+    try:
+        analytics_uc = GetTripAnalytics()
+        return await analytics_uc.execute(trip_id, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    
+@router.get("/trips/{trip_id}/export")
+async def export_trip_data(trip_id: str, user_id: str = Depends(get_current_user_id)):
+    try:
+        export_uc = ExportTripData()
+        pdf_data = await export_uc.execute(trip_id, user_id)
+        
+        return StreamingResponse(
+            io.BytesIO(pdf_data),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=trip_{trip_id}_export.pdf"}
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

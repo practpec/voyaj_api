@@ -78,6 +78,9 @@ class MongoTripRepository:
         return None
 
     async def find_by_user_id(self, user_id: str) -> List[Trip]:
+        print(f"[DEBUG] Searching trips for user_id: {user_id}")
+        print(f"[DEBUG] ObjectId conversion: {ObjectId(user_id)}")
+        
         cursor = self.collection.find({
             "$or": [
                 {"createdBy": ObjectId(user_id)},
@@ -88,6 +91,8 @@ class MongoTripRepository:
         
         trips = []
         async for doc in cursor:
+            print(f"[DEBUG] Found trip: {doc.get('title')} with members: {[str(m.get('userId')) for m in doc.get('members', [])]}")
+            
             doc["id"] = str(doc["_id"])
             doc["start_date"] = doc.get("startDate").date() if doc.get("startDate") else None
             doc["end_date"] = doc.get("endDate").date() if doc.get("endDate") else None
@@ -99,6 +104,16 @@ class MongoTripRepository:
                 member["user_id"] = str(member.get("userId"))
                 if "userId" in member:
                     del member["userId"]
+            
+            for day in doc.get("days", []):
+                day["id"] = str(day.get("_id"))
+                day["date"] = day.get("date").date() if day.get("date") else None
+                if "_id" in day:
+                    del day["_id"]
+                
+                for activity in day.get("activities", []):
+                    if "estimated_cost" in activity and activity["estimated_cost"] is not None:
+                        activity["estimated_cost"] = float(activity["estimated_cost"])
             
             del doc["_id"]
             if "startDate" in doc:
@@ -113,6 +128,8 @@ class MongoTripRepository:
                 del doc["createdAt"]
                 
             trips.append(Trip(**doc))
+        
+        print(f"[DEBUG] Total trips found: {len(trips)}")
         return trips
 
     async def update(self, trip_id: str, update_data: dict) -> bool:
@@ -123,6 +140,13 @@ class MongoTripRepository:
         return result.modified_count > 0
 
     async def add_member(self, trip_id: str, member_data: dict) -> bool:
+        # Convertir user_id a ObjectId antes de insertar
+        if "userId" in member_data:
+            member_data["userId"] = ObjectId(member_data["userId"])
+        elif "user_id" in member_data:
+            member_data["userId"] = ObjectId(member_data["user_id"])
+            del member_data["user_id"]
+            
         result = await self.collection.update_one(
             {"_id": ObjectId(trip_id)},
             {"$push": {"members": member_data}}

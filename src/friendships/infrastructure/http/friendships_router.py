@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List
+from typing import Dict, List
 from src.friendships.infrastructure.http.friendships_schemas import SendFriendRequestRequest, RespondFriendRequestRequest, FriendshipInvitationResponse
 from src.friendships.application.send_friend_request import SendFriendRequest
 from src.friendships.application.respond_to_friend_request import RespondToFriendRequest
+from src.friendships.application.get_friendship_requests import GetFriendshipRequests
 from src.friendships.application.list_friends import ListFriends
 from src.friendships.application.remove_friend import RemoveFriend
 from src.auth.infrastructure.http.auth_schemas import UserResponse
@@ -52,3 +53,17 @@ async def remove_friend(friend_id: str, user_id: str = Depends(get_current_user_
         await remove_friend_uc.execute(user_id, friend_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    
+@router.get("/friendships/requests")
+async def get_friendship_requests(user_id: str = Depends(get_current_user_id)) -> Dict[str, List[FriendshipInvitationResponse]]:
+    try:
+        requests_uc = GetFriendshipRequests()
+        requests = await requests_uc.execute(user_id)
+        
+        return {
+            "received": [FriendshipInvitationResponse(**inv.dict()) for inv in requests["received"]],
+            "sent": [FriendshipInvitationResponse(**inv.dict()) for inv in requests["sent"]]
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    

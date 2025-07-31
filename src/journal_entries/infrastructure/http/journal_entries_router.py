@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, Query, status, Depends
 from typing import List
 from src.journal_entries.infrastructure.http.journal_entries_schemas import CreateJournalEntryRequest, UpdateJournalEntryRequest, JournalEntryResponse
 from src.journal_entries.application.create_journal_entry import CreateJournalEntry
 from src.journal_entries.application.list_trip_journal_entries import ListTripJournalEntries
 from src.journal_entries.application.get_journal_entry import GetJournalEntry
 from src.journal_entries.application.update_journal_entry import UpdateJournalEntry
+from src.journal_entries.application.search_entries import SearchEntries
 from src.shared.infrastructure.security.authentication import get_current_user_id
 
 router = APIRouter(prefix="/trips/{trip_id}/journal-entries", tags=["journal-entries"])
@@ -65,3 +66,18 @@ async def update_journal_entry(trip_id: str, entry_id: str, request: UpdateJourn
         return JournalEntryResponse(**entry.dict())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    
+
+@router.get("/search", response_model=List[JournalEntryResponse])
+async def search_journal_entries(
+    trip_id: str,
+    q: str = Query(..., min_length=2),
+    user_id: str = Depends(get_current_user_id)
+):
+    try:
+        search_uc = SearchEntries()
+        entries = await search_uc.execute(trip_id, user_id, q)
+        return [JournalEntryResponse(**entry.dict()) for entry in entries]
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
