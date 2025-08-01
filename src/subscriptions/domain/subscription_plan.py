@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Dict, List, Any
 from decimal import Decimal
+from src.shared.config import settings
 
 class SubscriptionPlan(str, Enum):
     EXPLORADOR = "explorador"
@@ -77,7 +78,7 @@ class PlanPricing:
             "subtitle": "Para viajeros frecuentes",
             "price_mxn": Decimal("9.99"),
             "price_usd": Decimal("0.53"),
-            "stripe_price_id": "price_aventurero_monthly",
+            "stripe_price_id": settings.stripe_price_id_aventurero,
             "billing_interval": "month",
             "trial_days": 7,
             "popular": True,
@@ -99,7 +100,7 @@ class PlanPricing:
             "subtitle": "Para viajeros profesionales",
             "price_mxn": Decimal("19.99"),
             "price_usd": Decimal("1.06"),
-            "stripe_price_id": "price_nomada_monthly",
+            "stripe_price_id": settings.stripe_price_id_nomada_digital,
             "billing_interval": "month",
             "trial_days": 7,
             "popular": False,

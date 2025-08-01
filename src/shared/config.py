@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     cloudinary_cloud_name: Optional[str] = None
     cloudinary_api_key: Optional[str] = None
     cloudinary_api_secret: Optional[str] = None
+
+    stripe_secret_key: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    stripe_publishable_key: Optional[str] = None
+    stripe_price_id_aventurero: Optional[str] = None
+    stripe_price_id_nomada_digital: Optional[str] = None
+    
+    frontend_success_url: str = "http://localhost:3000/subscription/success"
+    frontend_cancel_url: str = "http://localhost:3000/subscription/cancel"
+    frontend_billing_portal_url: str = "http://localhost:3000/billing"
     
     allowed_origins: str = "http://localhost:3000"
     rate_limit_window_ms: int = 900000
