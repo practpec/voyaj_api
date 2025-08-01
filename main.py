@@ -1,9 +1,11 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.shared.config import settings
 from src.shared.infrastructure.database.mongo_client import connect_to_mongo, close_mongo_connection
 from src.shared.infrastructure.security.verification_middleware import EmailVerificationMiddleware
 from src.shared.infrastructure.middleware.subscription_middleware import SubscriptionMiddleware
+from src.shared.infrastructure.middleware.security_middleware import SecurityMiddleware
 from src.auth.infrastructure.http.auth_router import router as auth_router
 from src.trips.infrastructure.http.trips_router import router as trips_router
 from src.expenses.infrastructure.http.expenses_router import router as expenses_router
@@ -13,10 +15,17 @@ from src.friendships.infrastructure.http.friendships_router import router as fri
 from src.subscriptions.infrastructure.http.subscription_router import router as subscription_router
 from src.subscriptions.application.subscription_scheduler import execute_daily_tasks, execute_weekly_tasks
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await connect_to_mongo()
+    yield
+    await close_mongo_connection()
+
 app = FastAPI(
     title="Voyaj API",
     description="Tu plataforma de aventuras con suscripciones FREE y PRO",
-    version=settings.app_version
+    version=settings.app_version,
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -27,16 +36,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(SecurityMiddleware)
 app.add_middleware(SubscriptionMiddleware)
 app.add_middleware(EmailVerificationMiddleware)
-
-@app.on_event("startup")
-async def startup_event():
-    await connect_to_mongo()
-
-@app.on_event("shutdown") 
-async def shutdown_event():
-    await close_mongo_connection()
 
 app.include_router(auth_router)
 app.include_router(subscription_router)
@@ -46,7 +48,6 @@ app.include_router(photos_router)
 app.include_router(journal_entries_router)
 app.include_router(friendships_router)
 
-# Endpoints administrativos para tareas programadas
 @app.post("/admin/run-daily-tasks")
 async def run_daily_tasks():
     return await execute_daily_tasks()
@@ -91,4 +92,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=settings.port)

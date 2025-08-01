@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     mercadopago_webhook_secret: Optional[str] = None
     
     base_url: str = "http://localhost:8000"
-    price_pro_monthly: Decimal = Decimal("9.99")
+    price_pro_monthly: Decimal = Decimal("24.99")
     
     frontend_success_url: str = "http://localhost:3000/subscription/success"
     frontend_cancel_url: str = "http://localhost:3000/subscription/cancel"
