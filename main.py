@@ -3,19 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.shared.config import settings
 from src.shared.infrastructure.database.mongo_client import connect_to_mongo, close_mongo_connection
 from src.shared.infrastructure.security.verification_middleware import EmailVerificationMiddleware
-from src.shared.infrastructure.middleware.subscription_limits_middleware import SubscriptionLimitsMiddleware
+from src.shared.infrastructure.middleware.subscription_middleware import SubscriptionMiddleware
 from src.auth.infrastructure.http.auth_router import router as auth_router
 from src.trips.infrastructure.http.trips_router import router as trips_router
 from src.expenses.infrastructure.http.expenses_router import router as expenses_router
 from src.photos.infrastructure.http.photos_router import router as photos_router
 from src.journal_entries.infrastructure.http.journal_entries_router import router as journal_entries_router
 from src.friendships.infrastructure.http.friendships_router import router as friendships_router
-from src.plan_deviations.infrastructure.http.plan_deviations_router import router as plan_deviations_router
 from src.subscriptions.infrastructure.http.subscription_router import router as subscription_router
 
 app = FastAPI(
     title="Voyaj API",
-    description="Travel Tu plataforma de aventuras con sistema de suscripciones",
+    description="Tu plataforma de aventuras con suscripciones FREE y PRO",
     version=settings.app_version
 )
 
@@ -27,7 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_middleware(SubscriptionLimitsMiddleware)
+app.add_middleware(SubscriptionMiddleware)
 app.add_middleware(EmailVerificationMiddleware)
 
 @app.on_event("startup")
@@ -45,18 +44,19 @@ app.include_router(expenses_router)
 app.include_router(photos_router)
 app.include_router(journal_entries_router)
 app.include_router(friendships_router)
-app.include_router(plan_deviations_router)
 
 @app.get("/")
 async def root():
     return {
-        "message": "La API Voyaj esta en funcionamiento", 
+        "message": "La API Voyaj está en funcionamiento", 
         "version": settings.app_version,
         "features": {
-            "subscriptions": True,
-            "stripe_integration": True,
-            "limits_enforcement": True,
-            "trial_periods": True
+            "subscriptions": "FREE & PRO",
+            "payment_provider": "MercadoPago",
+            "plans": {
+                "FREE": "1 viaje, funciones básicas",
+                "PRO": "Viajes ilimitados, $9.99 MXN/mes"
+            }
         }
     }
 
@@ -69,7 +69,7 @@ async def health_check():
             "database": "connected",
             "subscriptions": "active",
             "email": "active",
-            "stripe": "connected"
+            "mercadopago": "connected"
         }
     }
 

@@ -1,13 +1,12 @@
 from src.auth.domain.user import User
 from src.auth.infrastructure.persistence.mongo_user_repository import MongoUserRepository
 from src.shared.infrastructure.security.hashing import hash_password
-from src.subscriptions.application.create_subscription import CreateSubscription
-from src.subscriptions.domain.subscription_plan import SubscriptionPlan
+from src.subscriptions.application.subscription_service import SubscriptionService
 
 class RegisterUser:
     def __init__(self):
         self.user_repository = MongoUserRepository()
-        self.create_subscription = CreateSubscription()
+        self.subscription_service = SubscriptionService()
 
     async def execute(self, email: str, password: str, name: str) -> User:
         existing_user = await self.user_repository.find_by_email(email)
@@ -23,10 +22,6 @@ class RegisterUser:
         )
         
         created_user = await self.user_repository.create(user)
-        
-        await self.create_subscription.execute(
-            user_id=created_user.id,
-            plan_type=SubscriptionPlan.EXPLORADOR
-        )
+        await self.subscription_service.create_free_subscription(created_user.id)
         
         return created_user
