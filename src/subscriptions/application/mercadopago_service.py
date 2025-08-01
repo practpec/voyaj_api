@@ -19,7 +19,6 @@ class MercadoPagoService:
         success_redirect = success_url or settings.frontend_success_url
         failure_redirect = failure_url or settings.frontend_cancel_url
         
-        # Validar URLs
         if not success_redirect or not success_redirect.startswith('http'):
             success_redirect = "https://www.google.com/success"
         if not failure_redirect or not failure_redirect.startswith('http'):
@@ -29,14 +28,27 @@ class MercadoPagoService:
             "items": [
                 {
                     "id": "voyaj_pro_monthly",
-                    "title": "Voyaj PRO - Suscripción Mensual",
+                    "title": "Suscripción Voyaj PRO",
+                    "description": "Plan mensual con beneficios premium",
                     "quantity": 1,
-                    "unit_price": float(settings.price_pro_monthly),
-                    "currency_id": "MXN"
+                    "unit_price": 24.99,
+                    "currency_id": "MXN",
+                    "category_id": "services"
                 }
             ],
             "payer": {
-                "email": user_email
+                "email": user_email,
+                "name": "Usuario Voyaj",
+                "surname": "Premium",
+                "phone": {
+                    "area_code": "52",
+                    "number": "5551234567"
+                },
+                "address": {
+                    "street_name": "Av. Principal",
+                    "street_number": 123,
+                    "zip_code": "01000"
+                }
             },
             "external_reference": f"voyaj_pro_{user_id}_{int(datetime.utcnow().timestamp())}",
             "back_urls": {
@@ -48,9 +60,55 @@ class MercadoPagoService:
             "notification_url": f"{settings.base_url}/subscriptions/webhook",
             "payment_methods": {
                 "excluded_payment_methods": [],
-                "excluded_payment_types": [],
-                "installments": 12
-            }
+                "excluded_payment_types": [
+                    {
+                        "id": "ticket"
+                    }
+                ],
+                "installments": 1,
+                "default_installments": 1
+            },
+            "shipments": {
+                "mode": "not_specified"
+            },
+            "statement_descriptor": "VOYAJ",
+            "additional_info": {
+                "items": [
+                    {
+                        "id": "voyaj_pro_monthly",
+                        "title": "Suscripción Voyaj PRO",
+                        "description": "Plan mensual premium",
+                        "quantity": 1,
+                        "unit_price": 24.99,
+                        "category_id": "services"
+                    }
+                ],
+                "payer": {
+                    "first_name": "Usuario",
+                    "last_name": "Voyaj",
+                    "phone": {
+                        "area_code": "52",
+                        "number": "5551234567"
+                    }
+                },
+                "shipments": {
+                    "receiver_address": {
+                        "zip_code": "01000",
+                        "state_name": "Ciudad de México",
+                        "city_name": "CDMX",
+                        "street_name": "Av. Principal",
+                        "street_number": 123
+                    }
+                }
+            },
+            "metadata": {
+                "user_id": user_id,
+                "subscription_type": "pro_monthly",
+                "integration": "voyaj_app"
+            },
+            "expires": True,
+            "expiration_date_from": datetime.utcnow().isoformat(),
+            "expiration_date_to": (datetime.utcnow().replace(hour=23, minute=59, second=59)).isoformat()
         }
 
         try:
