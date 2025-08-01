@@ -36,8 +36,32 @@ class EmailService:
         template_data: Dict[str, Any]
     ) -> bool:
         try:
-            subject = self.subjects.get_subject(template_type)
-            html_content = self.templates.get_template(template_type, template_data)
+            # Templates de AUTH (verificación, reset password)
+            auth_templates = ["verification", "password_reset"]
+            
+            # Templates de SUSCRIPCIONES
+            subscription_templates = [
+                "payment_successful", "cancellation_confirmation", "welcome_free", 
+                "welcome_premium", "payment_failed", "subscription_renewed", 
+                "upgrade_confirmation", "downgrade_warning", "limit_reached", 
+                "trial_ending", "subscription_expired", "payment_pending"
+            ]
+            
+            if template_type in subscription_templates:
+                # Usar templates de suscripciones
+                from src.shared.infrastructure.templates.subscription_subjects import SubscriptionSubjects
+                from src.shared.infrastructure.templates.subscription_templates import SubscriptionTemplates
+                subjects = SubscriptionSubjects()
+                templates = SubscriptionTemplates()
+                subject = subjects.get_subject(template_type)
+                html_content = templates.get_template(template_type, template_data)
+            elif template_type in auth_templates:
+                # Usar templates de auth (los originales)
+                subject = self.subjects.get_subject(template_type)
+                html_content = self.templates.get_template(template_type, template_data)
+            else:
+                # Template desconocido
+                raise ValueError(f"Unknown template type: {template_type}")
 
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject

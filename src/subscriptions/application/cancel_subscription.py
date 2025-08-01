@@ -36,16 +36,26 @@ class CancelSubscription:
         downgrade_date = None
 
         if subscription.stripe_subscription_id:
-            stripe_result = await self.stripe_service.cancel_subscription(
-                subscription.stripe_subscription_id,
-                at_period_end=not cancel_immediately
-            )
-            
-            if stripe_result:
-                access_until = stripe_result.get("current_period_end")
+            try:
+                stripe_result = await self.stripe_service.cancel_subscription(
+                    subscription.stripe_subscription_id,
+                    at_period_end=not cancel_immediately
+                )
+                
+                if stripe_result:
+                    access_until = stripe_result.get("current_period_end")
+                    if cancel_immediately:
+                        downgrade_date = datetime.utcnow()
+                    else:
+                        downgrade_date = access_until
+            except Exception as e:
+                # Si Stripe falla, continuamos con la cancelación local
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"[{timestamp}] [CANCEL_SUBSCRIPTION] [WARNING] Stripe cancellation failed, proceeding locally: {str(e)}")
                 if cancel_immediately:
                     downgrade_date = datetime.utcnow()
                 else:
+                    access_until = subscription.current_period_end or datetime.utcnow()
                     downgrade_date = access_until
 
         update_data = {
@@ -63,19 +73,24 @@ class CancelSubscription:
             access_until = subscription.current_period_end or datetime.utcnow()
             downgrade_date = access_until
 
-        await self.subscription_repository.update(subscription.id, update_data)
+        try:
+            await self.subscription_repository.update(subscription.id, update_data)
 
-        await self.email_service.send_cancellation_confirmation_email(
-            user_email=user.email,
-            user_name=user.name,
-            plan_name=subscription.plan_type,
-            access_until=access_until
-        )
+            await self.email_service.send_cancellation_confirmation_email(
+                user_email=user.email,
+                user_name=user.name,
+                plan_name=subscription.plan_type,
+                access_until=access_until
+            )
 
-        return {
-            "success": True,
-            "cancelled_at": datetime.utcnow(),
-            "access_until": access_until,
-            "downgrade_date": downgrade_date,
-            "immediate_cancellation": cancel_immediately
-        }
+            return {
+                "success": True,
+                "cancelled_at": datetime.utcnow(),
+                "access_until": access_until,
+                "downgrade_date": downgrade_date,
+                "immediate_cancellation": cancel_immediately
+            }
+        except Exception as e:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{timestamp}] [CANCEL_SUBSCRIPTION] [ERROR] Database update failed: {str(e)}")
+            raise ValueError(f"Failed to update subscription: {str(e)}")

@@ -39,6 +39,7 @@ class SubscriptionLimitsMiddleware(BaseHTTPMiddleware):
             "/subscriptions/plans"
         }
         
+        # PATRÓN CORREGIDO: Usar solo el path sin parámetros
         self.limit_controlled_endpoints = {
             "POST:/trips": {
                 "feature": "create_trip",
@@ -77,10 +78,31 @@ class SubscriptionLimitsMiddleware(BaseHTTPMiddleware):
         method = request.method
         endpoint_key = f"{method}:{path}"
         
-        if await self._should_skip_validation(path, method):
+        # VALIDACIÓN TEMPRANA PARA ENDPOINTS EXACTOS
+        if path in self.public_endpoints or path in self.auth_endpoints or path in self.subscription_endpoints:
             return await call_next(request)
         
-        if await self._needs_limit_validation(endpoint_key, path):
+        # VERIFICAR PATHS QUE EMPIEZAN CON /auth/
+        if path.startswith("/auth/"):
+            return await call_next(request)
+            
+        # VALIDACIÓN ESPECÍFICA PARA ENDPOINTS CONTROLADOS
+        needs_validation = False
+        endpoint_config = None
+        
+        # Verificar endpoint exacto primero
+        if endpoint_key in self.limit_controlled_endpoints:
+            needs_validation = True
+            endpoint_config = self.limit_controlled_endpoints[endpoint_key]
+        else:
+            # Verificar patrones con parámetros
+            for pattern, config in self.limit_controlled_endpoints.items():
+                if self._matches_pattern(pattern, endpoint_key):
+                    needs_validation = True
+                    endpoint_config = config
+                    break
+        
+        if needs_validation and endpoint_config:
             user_id = await self._extract_user_id(request)
             if not user_id:
                 return JSONResponse(
@@ -89,7 +111,7 @@ class SubscriptionLimitsMiddleware(BaseHTTPMiddleware):
                 )
             
             validation_result = await self._validate_endpoint_access(
-                endpoint_key, path, user_id, request
+                endpoint_config, path, user_id, request
             )
             
             if not validation_result["allowed"]:
@@ -100,31 +122,6 @@ class SubscriptionLimitsMiddleware(BaseHTTPMiddleware):
         
         return await call_next(request)
 
-    async def _should_skip_validation(self, path: str, method: str) -> bool:
-        if path in self.public_endpoints:
-            return True
-            
-        if path in self.auth_endpoints:
-            return True
-            
-        if path in self.subscription_endpoints:
-            return True
-            
-        if path.startswith("/auth/"):
-            return True
-            
-        return False
-
-    async def _needs_limit_validation(self, endpoint_key: str, path: str) -> bool:
-        if endpoint_key in self.limit_controlled_endpoints:
-            return True
-            
-        for pattern in self.limit_controlled_endpoints.keys():
-            if self._matches_pattern(pattern, endpoint_key):
-                return True
-                
-        return False
-
     def _matches_pattern(self, pattern: str, endpoint_key: str) -> bool:
         pattern_parts = pattern.split(":")
         endpoint_parts = endpoint_key.split(":")
@@ -132,7 +129,7 @@ class SubscriptionLimitsMiddleware(BaseHTTPMiddleware):
         if len(pattern_parts) != 2 or len(endpoint_parts) != 2:
             return False
             
-        if pattern_parts[0] != endpoint_parts[0]:
+        if pattern_parts[0] != endpoint_parts[0]:  # Método debe coincidir exactamente
             return False
             
         pattern_path = pattern_parts[1]
@@ -149,7 +146,7 @@ class SubscriptionLimitsMiddleware(BaseHTTPMiddleware):
             
         for pattern_seg, endpoint_seg in zip(pattern_segments, endpoint_segments):
             if pattern_seg.startswith("{") and pattern_seg.endswith("}"):
-                continue
+                continue  # Parámetro, acepta cualquier valor
             if pattern_seg != endpoint_seg:
                 return False
                 
@@ -173,18 +170,12 @@ class SubscriptionLimitsMiddleware(BaseHTTPMiddleware):
 
     async def _validate_endpoint_access(
         self, 
-        endpoint_key: str, 
+        endpoint_config: Dict[str, str], 
         path: str, 
         user_id: str, 
         request: Request,
     ) -> Dict[str, Any]:
-        endpoint_config = self._get_endpoint_config(endpoint_key, path)
-        
-        if not endpoint_config:
-            return {"allowed": True}
-            
         feature = endpoint_config["feature"]
-        limit_type = endpoint_config["limit_type"]
         
         try:
             if feature == "create_trip":
@@ -217,17 +208,7 @@ class SubscriptionLimitsMiddleware(BaseHTTPMiddleware):
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{timestamp}] [LIMITS_MIDDLEWARE] [ERROR] Validation failed: {str(e)}")
-            return {"allowed": True}
-
-    def _get_endpoint_config(self, endpoint_key: str, path: str) -> Optional[Dict[str, str]]:
-        if endpoint_key in self.limit_controlled_endpoints:
-            return self.limit_controlled_endpoints[endpoint_key]
-            
-        for pattern, config in self.limit_controlled_endpoints.items():
-            if self._matches_pattern(pattern, endpoint_key):
-                return config
-                
-        return None
+            return {"allowed": True}  # En caso de error, permitir la request
 
     def _extract_trip_id(self, path: str) -> Optional[str]:
         try:
@@ -284,23 +265,3 @@ class SubscriptionLimitsMiddleware(BaseHTTPMiddleware):
             "available_plans": recommended_plans,
             "upgrade_url": "/subscriptions/checkout"
         }
-
-    async def _send_limit_reached_email(self, user_id: str, limit_type: str, message: str) -> None:
-        try:
-            from src.subscriptions.application.send_subscription_emails import SendSubscriptionEmails
-            from src.auth.infrastructure.persistence.mongo_user_repository import MongoUserRepository
-            
-            user_repository = MongoUserRepository()
-            email_service = SendSubscriptionEmails()
-            
-            user = await user_repository.find_by_id(user_id)
-            if user:
-                await email_service.send_limit_reached_email(
-                    user_email=user.email,
-                    user_name=user.name,
-                    limit_message=message
-                )
-        except Exception as e:
-            from datetime import datetime
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] [LIMITS_MIDDLEWARE] [ERROR] Failed to send limit email: {str(e)}")

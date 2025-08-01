@@ -18,3 +18,4 @@ certifi
 reportlab
 pandas
 stripe
+

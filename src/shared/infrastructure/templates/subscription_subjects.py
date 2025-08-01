@@ -1,7 +1,10 @@
 class SubscriptionSubjects:
     
     def __init__(self):
-        self.subjects = {
+         self.subjects = {
+            "verification": "Verifica tu cuenta en Voyaj",
+            "password_reset": "Restablece tu contraseña en Voyaj",
+            "trip_invitation": "Te han invitado a un viaje en Voyaj",
             "welcome_free": "¡Bienvenido a Voyaj! Tu plan Explorador está listo",
             "welcome_premium": "¡Bienvenido a Voyaj Premium! Tu período de prueba ha comenzado",
             "payment_pending": "Completa tu suscripción a Voyaj - Período de prueba activo",

@@ -23,8 +23,8 @@ class CreateSubscription:
             raise ValueError("User not found")
 
         existing_subscription = await self.subscription_repository.find_by_user_id(user_id)
-        if existing_subscription:
-            raise ValueError("User already has a subscription")
+        if existing_subscription and existing_subscription.plan_type != "explorador":
+            raise ValueError("User already has a premium subscription")
 
         initial_status = self._determine_initial_status(plan_type)
         
@@ -103,14 +103,11 @@ class CreateSubscription:
             raise ValueError("User not found")
 
         existing_subscription = await self.subscription_repository.find_by_user_id(user_id)
-        if existing_subscription and existing_subscription.status not in [
-            SubscriptionStatus.TRIALING.value, 
-            SubscriptionStatus.PENDING.value
-        ]:
-            raise ValueError("User already has an active subscription")
-
-        if existing_subscription:
+        
+        if existing_subscription and existing_subscription.plan_type == "explorador":
+            # Upgrade desde plan gratuito
             update_data = {
+                "plan_type": plan_type.value,
                 "status": SubscriptionStatus.ACTIVE.value,
                 "stripe_customer_id": stripe_customer_id,
                 "stripe_subscription_id": stripe_subscription_id,
