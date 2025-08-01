@@ -5,6 +5,8 @@ from src.shared.config import settings
 
 class MercadoPagoService:
     def __init__(self):
+        if not settings.mercadopago_access_token:
+            raise ValueError("MercadoPago access token not configured")
         self.sdk = mercadopago.SDK(settings.mercadopago_access_token)
 
     async def create_payment_preference(
@@ -14,9 +16,20 @@ class MercadoPagoService:
         success_url: str = None,
         failure_url: str = None
     ) -> Dict[str, Any]:
+        # Asegurar que las URLs estén definidas y sean válidas
+        success_redirect = success_url or settings.frontend_success_url
+        failure_redirect = failure_url or settings.frontend_cancel_url
+        
+        # Validar URLs
+        if not success_redirect or not success_redirect.startswith('http'):
+            success_redirect = "https://www.google.com/success"
+        if not failure_redirect or not failure_redirect.startswith('http'):
+            failure_redirect = "https://www.google.com/cancel"
+        
         preference_data = {
             "items": [
                 {
+                    "id": "voyaj_pro_monthly",
                     "title": "Voyaj PRO - Suscripción Mensual",
                     "quantity": 1,
                     "unit_price": float(settings.price_pro_monthly),
@@ -28,72 +41,75 @@ class MercadoPagoService:
             },
             "external_reference": f"voyaj_pro_{user_id}_{int(datetime.utcnow().timestamp())}",
             "back_urls": {
-                "success": success_url or settings.frontend_success_url,
-                "failure": failure_url or settings.frontend_cancel_url,
-                "pending": success_url or settings.frontend_success_url
+                "success": success_redirect,
+                "failure": failure_redirect,
+                "pending": success_redirect
             },
             "auto_return": "approved",
-            "expires": True,
-            "expiration_date_from": datetime.utcnow().isoformat(),
-            "expiration_date_to": (datetime.utcnow().replace(hour=23, minute=59, second=59)).isoformat()
+            "notification_url": f"{settings.base_url}/subscriptions/webhook"
         }
 
         try:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{timestamp}] [MERCADOPAGO_SERVICE] Creating preference for user {user_id}")
+            print(f"[{timestamp}] [MERCADOPAGO_SERVICE] Success URL: {success_redirect}")
+            print(f"[{timestamp}] [MERCADOPAGO_SERVICE] Failure URL: {failure_redirect}")
+            print(f"[{timestamp}] [MERCADOPAGO_SERVICE] Notification URL: {settings.base_url}/subscriptions/webhook")
+            
             preference_response = self.sdk.preference().create(preference_data)
-            preference = preference_response["response"]
+            
+            print(f"[{timestamp}] [MERCADOPAGO_SERVICE] Raw response: {preference_response}")
+            
+            if preference_response.get("status") != 201:
+                error_msg = preference_response.get("response", {}).get("message", "Unknown error")
+                print(f"[{timestamp}] [MERCADOPAGO_SERVICE] [ERROR] API Error: {error_msg}")
+                raise ValueError(f"MercadoPago API error: {error_msg}")
+            
+            preference = preference_response.get("response", {})
+            
+            if not preference or not preference.get("id"):
+                print(f"[{timestamp}] [MERCADOPAGO_SERVICE] [ERROR] Invalid response structure: {preference}")
+                raise ValueError("Invalid response from MercadoPago API")
+            
+            # Detectar tipo de credenciales correctamente
+            is_prod_token = "APP_USR" in settings.mercadopago_access_token
+            is_test_token = "TEST" in settings.mercadopago_access_token
+            
+            # Para credenciales de producción, usar sandbox_init_point para pruebas
+            if is_prod_token:
+                init_point_key = "sandbox_init_point"
+                print(f"[{timestamp}] [MERCADOPAGO_SERVICE] Using SANDBOX mode (credenciales PROD para testing)")
+            elif is_test_token:
+                init_point_key = "init_point"
+                print(f"[{timestamp}] [MERCADOPAGO_SERVICE] Using TEST mode (credenciales TEST)")
+            else:
+                init_point_key = "init_point"
+                print(f"[{timestamp}] [MERCADOPAGO_SERVICE] Using default mode")
             
             return {
                 "preference_id": preference["id"],
-                "init_point": preference["init_point"],
-                "sandbox_init_point": preference["sandbox_init_point"]
+                "init_point": preference.get(init_point_key, preference.get("init_point", "")),
+                "sandbox_init_point": preference.get("sandbox_init_point", ""),
+                "is_test_mode": is_prod_token or is_test_token,
+                "credentials_type": "PROD" if is_prod_token else ("TEST" if is_test_token else "UNKNOWN"),
+                "url_used": init_point_key
             }
+            
         except Exception as e:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] [MERCADOPAGO_SERVICE] [ERROR] Failed to create preference: {str(e)}")
-            raise ValueError("Failed to create payment preference")
+            print(f"[{timestamp}] [MERCADOPAGO_SERVICE] [ERROR] Exception: {str(e)}")
+            raise ValueError(f"Failed to create payment preference: {str(e)}")
 
     async def get_payment_info(self, payment_id: str) -> Optional[Dict[str, Any]]:
         try:
             payment_response = self.sdk.payment().get(payment_id)
-            payment = payment_response["response"]
+            
+            if payment_response.get("status") != 200:
+                return None
+                
+            payment = payment_response.get("response", {})
             return payment
         except Exception as e:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{timestamp}] [MERCADOPAGO_SERVICE] [ERROR] Failed to get payment {payment_id}: {str(e)}")
             return None
-
-    def validate_webhook_signature(self, payload: str, signature: str) -> bool:
-        import hmac
-        import hashlib
-        
-        try:
-            parts = signature.split(',')
-            ts = None
-            hash_received = None
-            
-            for part in parts:
-                key_value = part.split('=', 1)
-                if len(key_value) == 2:
-                    key = key_value[0].strip()
-                    value = key_value[1].strip()
-                    if key == "ts":
-                        ts = value
-                    elif key == "v1":
-                        hash_received = value
-            
-            if not ts or not hash_received:
-                return False
-            
-            manifest = f"ts={ts}&payload={payload}"
-            hash_calculated = hmac.new(
-                settings.mercadopago_webhook_secret.encode(),
-                manifest.encode(),
-                hashlib.sha256
-            ).hexdigest()
-            
-            return hash_calculated == hash_received
-            
-        except Exception as e:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] [MERCADOPAGO_SERVICE] [ERROR] Webhook validation failed: {str(e)}")
-            return False
