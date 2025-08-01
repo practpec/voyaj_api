@@ -2,7 +2,7 @@ from typing import Dict, Any
 from src.subscriptions.domain.subscription_plan import SubscriptionPlan, get_stripe_price_id, get_plan_info
 from src.subscriptions.infrastructure.persistence.mongo_subscription_repository import MongoSubscriptionRepository
 from src.auth.infrastructure.persistence.mongo_user_repository import MongoUserRepository
-from src.subscriptions.infrastructure.service.stripe_service import StripeService
+from src.shared.infrastructure.services.stripe_service import StripeService
 
 class CreateCheckoutSession:
     def __init__(self):
@@ -24,16 +24,18 @@ class CreateCheckoutSession:
         if plan_type == SubscriptionPlan.EXPLORADOR:
             raise ValueError("Free plan does not require checkout")
 
-        existing_subscription = await self.subscription_repository.find_by_user_id(user_id)
-        if existing_subscription and existing_subscription.status == "active":
-            raise ValueError("User already has an active subscription")
+        subscription = await self.subscription_repository.find_by_user_id(user_id)
+        if not subscription:
+            raise ValueError("User subscription not found")
+
+        if subscription.plan_type != SubscriptionPlan.EXPLORADOR.value:
+            raise ValueError("User already has a premium subscription")
 
         stripe_price_id = get_stripe_price_id(plan_type)
         if not stripe_price_id:
             raise ValueError(f"No Stripe price ID configured for plan: {plan_type}")
 
         customer_id = await self._get_or_create_stripe_customer(user)
-
         plan_info = get_plan_info(plan_type)
         trial_days = plan_info.get("trial_days", 0)
 
@@ -50,12 +52,6 @@ class CreateCheckoutSession:
         if not checkout_session:
             raise ValueError("Failed to create Stripe checkout session")
 
-        await self._update_or_create_pending_subscription(
-            user_id, 
-            plan_type, 
-            customer_id
-        )
-
         return {
             "checkout_url": checkout_session["url"],
             "session_id": checkout_session["session_id"],
@@ -68,12 +64,12 @@ class CreateCheckoutSession:
         }
 
     async def _get_or_create_stripe_customer(self, user) -> str:
-        existing_subscription = await self.subscription_repository.find_by_user_id(user.id)
+        subscription = await self.subscription_repository.find_by_user_id(user.id)
         
-        if existing_subscription and existing_subscription.stripe_customer_id:
-            customer = await self.stripe_service.get_customer(existing_subscription.stripe_customer_id)
+        if subscription and subscription.stripe_customer_id:
+            customer = await self.stripe_service.get_customer(subscription.stripe_customer_id)
             if customer:
-                return existing_subscription.stripe_customer_id
+                return subscription.stripe_customer_id
 
         customer_id = await self.stripe_service.create_customer(
             email=user.email,
@@ -84,34 +80,11 @@ class CreateCheckoutSession:
         if not customer_id:
             raise ValueError("Failed to create Stripe customer")
 
+        await self.subscription_repository.update(subscription.id, {
+            "stripe_customer_id": customer_id
+        })
+
         return customer_id
-
-    async def _update_or_create_pending_subscription(
-        self,
-        user_id: str,
-        plan_type: SubscriptionPlan,
-        customer_id: str
-    ) -> None:
-        from src.subscriptions.domain.subscription import Subscription
-        from src.subscriptions.domain.subscription_events import SubscriptionStatus
-
-        existing_subscription = await self.subscription_repository.find_by_user_id(user_id)
-        
-        if existing_subscription:
-            update_data = {
-                "plan_type": plan_type.value,
-                "status": SubscriptionStatus.PENDING.value,
-                "stripe_customer_id": customer_id
-            }
-            await self.subscription_repository.update(existing_subscription.id, update_data)
-        else:
-            subscription = Subscription(
-                user_id=user_id,
-                plan_type=plan_type.value,
-                status=SubscriptionStatus.PENDING.value,
-                stripe_customer_id=customer_id
-            )
-            await self.subscription_repository.create(subscription)
 
     async def create_upgrade_session(
         self,
