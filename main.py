@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,12 +26,16 @@ app = FastAPI(
     title="Voyaj API",
     description="Tu plataforma de aventuras con suscripciones FREE y PRO",
     version=settings.app_version,
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs" if settings.environment == "development" else "/api/docs",
+    redoc_url="/redoc" if settings.environment == "development" else "/api/redoc"
 )
+
+origins = settings.allowed_origins.split(",") if settings.allowed_origins else ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins.split(","),
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,6 +66,7 @@ async def root():
     return {
         "message": "La API Voyaj está en funcionamiento", 
         "version": settings.app_version,
+        "environment": settings.environment,
         "features": {
             "subscriptions": "FREE & PRO",
             "payment_provider": "MercadoPago",
@@ -81,6 +87,7 @@ async def health_check():
     return {
         "status": "healthy", 
         "environment": settings.environment,
+        "port": os.getenv("PORT", "8000"),
         "services": {
             "database": "connected",
             "subscriptions": "active",
@@ -92,4 +99,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=settings.port)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
