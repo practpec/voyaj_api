@@ -22,6 +22,12 @@ class RegisterUser:
         )
         
         created_user = await self.user_repository.create(user)
-        await self.subscription_service.create_free_subscription(created_user.id)
+        
+        try:
+            await self.subscription_service.create_free_subscription(created_user.id)
+        except Exception as e:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{timestamp}] [REGISTER_USER] [ERROR] Failed to create subscription: {str(e)}")
         
         return created_user

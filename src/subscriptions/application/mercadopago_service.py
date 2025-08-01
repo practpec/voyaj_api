@@ -45,7 +45,7 @@ class MercadoPagoService:
             return {
                 "preference_id": preference["id"],
                 "init_point": preference["init_point"],
-                "sandbox_init_point": preference.get("sandbox_init_point")
+                "sandbox_init_point": preference["sandbox_init_point"]
             }
         except Exception as e:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

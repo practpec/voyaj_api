@@ -38,11 +38,6 @@ class SubscriptionMiddleware(BaseHTTPMiddleware):
             "/subscriptions/create-payment",
             "/subscriptions/cancel"
         }
-        
-        # Endpoints que requieren PRO
-        self.pro_required_endpoints = {
-            "POST:/trips": "Crear más de 1 viaje requiere plan PRO"
-        }
 
     @property
     def subscription_service(self) -> SubscriptionService:
@@ -53,7 +48,6 @@ class SubscriptionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         method = request.method
-        endpoint_key = f"{method}:{path}"
         
         # Permitir endpoints públicos y de auth
         if (path in self.public_endpoints or 
@@ -62,45 +56,34 @@ class SubscriptionMiddleware(BaseHTTPMiddleware):
             path.startswith("/auth/")):
             return await call_next(request)
         
-        # Verificar si necesita validación PRO
-        needs_pro = False
-        pro_message = ""
-        
-        if endpoint_key in self.pro_required_endpoints:
-            needs_pro = True
-            pro_message = self.pro_required_endpoints[endpoint_key]
-        elif endpoint_key == "POST:/trips":
-            # Verificar si ya tiene 1 viaje (límite FREE)
+        # Solo validar límites en creación de viajes para usuarios FREE
+        if method == "POST" and path == "/trips":
             user_id = await self._extract_user_id(request)
             if user_id:
-                trip_count = await self._count_user_trips(user_id)
-                if trip_count >= 1:
-                    needs_pro = True
-                    pro_message = "Plan FREE permite solo 1 viaje. Actualiza a PRO para viajes ilimitados."
-        
-        if needs_pro:
-            user_id = await self._extract_user_id(request)
-            if not user_id:
-                return JSONResponse(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={"detail": "Authentication required"}
-                )
-            
-            try:
-                subscription_status = await self.subscription_service.get_subscription_status(user_id)
-                if not subscription_status["is_pro"]:
-                    return JSONResponse(
-                        status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                        content={
-                            "detail": "PRO subscription required",
-                            "message": pro_message,
-                            "current_plan": subscription_status["plan"],
-                            "upgrade_required": True
-                        }
-                    )
-            except Exception:
-                # En caso de error, permitir la request
-                pass
+                try:
+                    subscription_status = await self.subscription_service.get_subscription_status(user_id)
+                    
+                    # Si es FREE, verificar límite de viajes
+                    if not subscription_status["is_pro"]:
+                        trip_count = await self._count_user_trips(user_id)
+                        if trip_count >= 1:
+                            return JSONResponse(
+                                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                                content={
+                                    "detail": "PRO subscription required",
+                                    "message": "Plan FREE permite solo 1 viaje. Actualiza a PRO para viajes ilimitados.",
+                                    "current_plan": subscription_status["plan"],
+                                    "current_trips": trip_count,
+                                    "max_trips_free": 1,
+                                    "upgrade_required": True
+                                }
+                            )
+                except Exception as e:
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"[{timestamp}] [SUBSCRIPTION_MIDDLEWARE] [ERROR] {str(e)}")
+                    # En caso de error, permitir la request
+                    pass
         
         return await call_next(request)
 
@@ -125,6 +108,11 @@ class SubscriptionMiddleware(BaseHTTPMiddleware):
             from src.trips.infrastructure.persistence.mongo_trip_repository import MongoTripRepository
             trip_repository = MongoTripRepository()
             trips = await trip_repository.find_by_user_id(user_id)
-            return len([trip for trip in trips if not trip.is_deleted])
-        except Exception:
+            # Contar solo viajes no eliminados
+            active_trips = [trip for trip in trips if not trip.is_deleted]
+            return len(active_trips)
+        except Exception as e:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{timestamp}] [SUBSCRIPTION_MIDDLEWARE] [ERROR] Count trips failed: {str(e)}")
             return 0

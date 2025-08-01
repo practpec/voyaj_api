@@ -2,7 +2,7 @@ from typing import Optional, List
 from bson import ObjectId
 from datetime import datetime
 from src.shared.infrastructure.database.mongo_client import get_database
-from src.subscriptions.domain.subscription import Subscription
+from src.subscriptions.domain.subscription import Subscription, PlanType
 
 class MongoSubscriptionRepository:
     def __init__(self):
@@ -10,20 +10,15 @@ class MongoSubscriptionRepository:
         self.collection = self.db.subscriptions
 
     async def create(self, subscription: Subscription) -> Subscription:
-        subscription_dict = subscription.dict(exclude={"id"})
-        subscription_dict["userId"] = ObjectId(subscription.user_id)
-        subscription_dict["planType"] = subscription.plan_type
-        subscription_dict["createdAt"] = subscription.created_at
-        subscription_dict["updatedAt"] = subscription.updated_at
-        subscription_dict["expiresAt"] = subscription.expires_at
-        subscription_dict["mercadopagoPaymentId"] = subscription.mercadopago_payment_id
-        
-        del subscription_dict["user_id"]
-        del subscription_dict["plan_type"] 
-        del subscription_dict["created_at"]
-        del subscription_dict["updated_at"]
-        del subscription_dict["expires_at"]
-        del subscription_dict["mercadopago_payment_id"]
+        subscription_dict = {
+            "userId": ObjectId(subscription.user_id),
+            "planType": subscription.plan_type,
+            "status": subscription.status,
+            "mercadopagoPaymentId": subscription.mercadopago_payment_id,
+            "expiresAt": subscription.expires_at,
+            "createdAt": subscription.created_at,
+            "updatedAt": subscription.updated_at
+        }
         
         result = await self.collection.insert_one(subscription_dict)
         subscription.id = str(result.inserted_id)
@@ -59,7 +54,7 @@ class MongoSubscriptionRepository:
     async def find_expired_subscriptions(self) -> List[Subscription]:
         now = datetime.utcnow()
         cursor = self.collection.find({
-            "planType": "pro",
+            "planType": PlanType.PRO,
             "status": "active",
             "expiresAt": {"$lt": now}
         })
@@ -73,7 +68,7 @@ class MongoSubscriptionRepository:
         return Subscription(
             id=str(doc["_id"]),
             user_id=str(doc["userId"]),
-            plan_type=doc.get("planType", "free"),
+            plan_type=doc.get("planType", PlanType.FREE),
             status=doc.get("status", "active"),
             mercadopago_payment_id=doc.get("mercadopagoPaymentId"),
             expires_at=doc.get("expiresAt"),

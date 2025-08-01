@@ -1,6 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Any
-from src.subscriptions.domain.subscription import Subscription, PlanType
+from src.subscriptions.domain.subscription import Subscription
 from src.subscriptions.infrastructure.persistence.mongo_subscription_repository import MongoSubscriptionRepository
 from src.auth.infrastructure.persistence.mongo_user_repository import MongoUserRepository
 
@@ -10,7 +10,7 @@ class SubscriptionService:
         self.user_repository = MongoUserRepository()
 
     async def create_free_subscription(self, user_id: str) -> Subscription:
-        subscription = Subscription(user_id=user_id, plan_type=PlanType.FREE)
+        subscription = Subscription(user_id=user_id)
         return await self.subscription_repository.create(subscription)
 
     async def activate_pro_subscription(self, user_id: str, payment_id: str) -> Subscription:
@@ -21,7 +21,7 @@ class SubscriptionService:
         subscription.activate_pro(payment_id)
         await self.subscription_repository.update(subscription.id, subscription)
         
-        await self._send_pro_activated_email(user_id)
+        await self._send_activation_email(user_id)
         return subscription
 
     async def get_user_subscription(self, user_id: str) -> Subscription:
@@ -29,7 +29,7 @@ class SubscriptionService:
         if not subscription:
             subscription = await self.create_free_subscription(user_id)
         
-        if subscription.plan_type == PlanType.PRO and subscription.expires_at:
+        if subscription.plan_type == "pro" and subscription.expires_at:
             if subscription.expires_at <= datetime.utcnow():
                 await self._expire_subscription(subscription)
         
@@ -42,7 +42,7 @@ class SubscriptionService:
 
         subscription.cancel_to_free()
         await self.subscription_repository.update(subscription.id, subscription)
-        await self._send_cancelled_email(user_id)
+        await self._send_cancellation_email(user_id)
         return True
 
     async def process_expired_subscriptions(self) -> int:
@@ -69,15 +69,15 @@ class SubscriptionService:
     async def _expire_subscription(self, subscription: Subscription) -> None:
         subscription.expire_to_free()
         await self.subscription_repository.update(subscription.id, subscription)
-        await self._send_expired_email(subscription.user_id)
+        await self._send_expiration_email(subscription.user_id)
 
     def _get_days_remaining(self, subscription: Subscription) -> int:
-        if subscription.expires_at and subscription.plan_type == PlanType.PRO:
+        if subscription.expires_at and subscription.plan_type == "pro":
             remaining = subscription.expires_at - datetime.utcnow()
             return max(0, remaining.days)
         return 0
 
-    async def _send_pro_activated_email(self, user_id: str) -> None:
+    async def _send_activation_email(self, user_id: str) -> None:
         try:
             user = await self.user_repository.find_by_id(user_id)
             if user:
@@ -96,7 +96,7 @@ class SubscriptionService:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{timestamp}] [SUBSCRIPTION_SERVICE] [ERROR] Failed to send activation email: {str(e)}")
 
-    async def _send_expired_email(self, user_id: str) -> None:
+    async def _send_expiration_email(self, user_id: str) -> None:
         try:
             user = await self.user_repository.find_by_id(user_id)
             if user:
@@ -114,7 +114,7 @@ class SubscriptionService:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{timestamp}] [SUBSCRIPTION_SERVICE] [ERROR] Failed to send expiration email: {str(e)}")
 
-    async def _send_cancelled_email(self, user_id: str) -> None:
+    async def _send_cancellation_email(self, user_id: str) -> None:
         try:
             user = await self.user_repository.find_by_id(user_id)
             if user:

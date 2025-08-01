@@ -17,5 +17,5 @@ jinja2
 certifi
 reportlab
 pandas
-stripe
+mercadopago
 
