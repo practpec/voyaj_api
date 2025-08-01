@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, Request, status, Depends
-from typing import Dict, Any
+from typing import Dict, Any, List
 from src.subscriptions.application.subscription_service import SubscriptionService
 from src.subscriptions.application.mercadopago_service import MercadoPagoService
+from src.subscriptions.application.payment_history_service import PaymentHistoryService
+from src.subscriptions.application.expiration_notification_service import ExpirationNotificationService
 from src.shared.infrastructure.security.authentication import get_current_user_id
 from src.auth.infrastructure.persistence.mongo_user_repository import MongoUserRepository
 
@@ -12,6 +14,22 @@ async def get_subscription_status(user_id: str = Depends(get_current_user_id)) -
     try:
         subscription_service = SubscriptionService()
         return await subscription_service.get_subscription_status(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/payment-history")
+async def get_payment_history(user_id: str = Depends(get_current_user_id)) -> List[Dict[str, Any]]:
+    try:
+        payment_history_service = PaymentHistoryService()
+        return await payment_history_service.get_user_payment_history(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/payment-statistics")
+async def get_payment_statistics(user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
+    try:
+        payment_history_service = PaymentHistoryService()
+        return await payment_history_service.get_payment_statistics(user_id)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -60,44 +78,20 @@ async def cancel_subscription(user_id: str = Depends(get_current_user_id)) -> Di
 @router.post("/webhook")
 async def mercadopago_webhook(request: Request) -> Dict[str, str]:
     try:
-        # Obtener parámetros de la URL
         topic = request.query_params.get("topic")
         id_param = request.query_params.get("id")
         
-        # Log detallado para debug
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [WEBHOOK] Received notification:")
-        print(f"[{timestamp}] [WEBHOOK] Topic: {topic}")
-        print(f"[{timestamp}] [WEBHOOK] ID: {id_param}")
-        print(f"[{timestamp}] [WEBHOOK] Headers: {dict(request.headers)}")
-        
-        # Leer el body también
-        body = await request.body()
-        if body:
-            import json
-            try:
-                body_data = json.loads(body)
-                print(f"[{timestamp}] [WEBHOOK] Body: {body_data}")
-            except:
-                print(f"[{timestamp}] [WEBHOOK] Body (raw): {body.decode()}")
-        
-        # Procesar según el tipo de notificación
         if topic == "payment" and id_param:
-            print(f"[{timestamp}] [WEBHOOK] Processing payment: {id_param}")
             await _process_payment_notification(id_param)
         elif topic == "merchant_order" and id_param:
-            print(f"[{timestamp}] [WEBHOOK] Processing merchant order: {id_param}")
-            await _process_merchant_order_notification(id_param)
-        else:
-            print(f"[{timestamp}] [WEBHOOK] Unknown notification type: {topic}")
+            pass  # Merchant orders procesados pero sin logging
         
         return {"status": "ok"}
         
     except Exception as e:
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [WEBHOOK] [ERROR] Failed to process webhook: {str(e)}")
+        print(f"[{timestamp}] [WEBHOOK] [ERROR] {str(e)}")
         return {"status": "error", "message": str(e)}
 
 async def _process_payment_notification(payment_id: str) -> None:
@@ -105,51 +99,44 @@ async def _process_payment_notification(payment_id: str) -> None:
         mercadopago_service = MercadoPagoService()
         payment_info = await mercadopago_service.get_payment_info(payment_id)
         
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [WEBHOOK] Payment info: {payment_info}")
-        
         if not payment_info or payment_info.get("status") != "approved":
-            print(f"[{timestamp}] [WEBHOOK] Payment not approved: {payment_info.get('status') if payment_info else 'No info'}")
             return
         
         external_reference = payment_info.get("external_reference", "")
         if not external_reference.startswith("voyaj_pro_"):
-            print(f"[{timestamp}] [WEBHOOK] Invalid external reference: {external_reference}")
             return
         
         parts = external_reference.split("_")
         if len(parts) < 3:
-            print(f"[{timestamp}] [WEBHOOK] Invalid external reference format: {external_reference}")
             return
         
         user_id = parts[2]
-        print(f"[{timestamp}] [WEBHOOK] Activating PRO for user: {user_id}")
         
         subscription_service = SubscriptionService()
         await subscription_service.activate_pro_subscription(user_id, payment_id)
         
-        print(f"[{timestamp}] [WEBHOOK] PRO subscription activated successfully for user: {user_id}")
-        
     except Exception as e:
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [WEBHOOK] [ERROR] Failed to process payment {payment_id}: {str(e)}")
+        print(f"[{timestamp}] [WEBHOOK] [ERROR] Payment processing failed {payment_id}: {str(e)}")
 
-async def _process_merchant_order_notification(order_id: str) -> None:
+# Endpoint administrativo para verificar expiraciones
+@router.get("/admin/expiration-summary")
+async def get_expiration_summary() -> Dict[str, Any]:
     try:
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [WEBHOOK] Processing merchant order {order_id}")
-        
-        # Para merchant_order, necesitamos obtener la orden y luego los pagos asociados
-        mercadopago_service = MercadoPagoService()
-        
-        # Intentar obtener información de la orden
-        # Nota: Necesitarías implementar get_merchant_order_info en el servicio
-        print(f"[{timestamp}] [WEBHOOK] Merchant order {order_id} received but not fully processed yet")
-        
+        expiration_service = ExpirationNotificationService()
+        return await expiration_service.get_expiration_summary()
     except Exception as e:
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [WEBHOOK] [ERROR] Failed to process merchant order {order_id}: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/admin/send-expiration-notifications")
+async def send_expiration_notifications() -> Dict[str, Any]:
+    try:
+        expiration_service = ExpirationNotificationService()
+        notifications_sent = await expiration_service.check_and_notify_expiring_subscriptions()
+        return {
+            "notifications_sent": notifications_sent,
+            "message": f"Sent {notifications_sent} expiration warnings"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

@@ -11,6 +11,7 @@ from src.photos.infrastructure.http.photos_router import router as photos_router
 from src.journal_entries.infrastructure.http.journal_entries_router import router as journal_entries_router
 from src.friendships.infrastructure.http.friendships_router import router as friendships_router
 from src.subscriptions.infrastructure.http.subscription_router import router as subscription_router
+from src.subscriptions.application.subscription_scheduler import execute_daily_tasks, execute_weekly_tasks
 
 app = FastAPI(
     title="Voyaj API",
@@ -45,6 +46,15 @@ app.include_router(photos_router)
 app.include_router(journal_entries_router)
 app.include_router(friendships_router)
 
+# Endpoints administrativos para tareas programadas
+@app.post("/admin/run-daily-tasks")
+async def run_daily_tasks():
+    return await execute_daily_tasks()
+
+@app.post("/admin/run-weekly-tasks")
+async def run_weekly_tasks():
+    return await execute_weekly_tasks()
+
 @app.get("/")
 async def root():
     return {
@@ -55,8 +65,13 @@ async def root():
             "payment_provider": "MercadoPago",
             "plans": {
                 "FREE": "1 viaje, funciones básicas",
-                "PRO": "Viajes ilimitados, $9.99 MXN/mes"
-            }
+                "PRO": "Viajes ilimitados, $24.99 MXN/mes"
+            },
+            "new_features": [
+                "Payment history tracking",
+                "Expiration notifications (7 days)",
+                "Automated subscription management"
+            ]
         }
     }
 
@@ -69,7 +84,8 @@ async def health_check():
             "database": "connected",
             "subscriptions": "active",
             "email": "active",
-            "mercadopago": "connected"
+            "mercadopago": "connected",
+            "scheduler": "active"
         }
     }
 
