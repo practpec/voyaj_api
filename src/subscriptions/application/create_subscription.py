@@ -1,5 +1,6 @@
 from src.subscriptions.domain.subscription import Subscription
-from src.subscriptions.domain.subscription_plan import SubscriptionPlan, SubscriptionStatus, is_premium_plan
+from src.subscriptions.domain.subscription_plan import SubscriptionPlan, is_premium_plan
+from src.subscriptions.domain.subscription_events import SubscriptionStatus
 from src.subscriptions.infrastructure.persistence.mongo_subscription_repository import MongoSubscriptionRepository
 from src.auth.infrastructure.persistence.mongo_user_repository import MongoUserRepository
 from src.subscriptions.application.send_subscription_emails import SendSubscriptionEmails
