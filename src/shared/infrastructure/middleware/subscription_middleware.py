@@ -49,6 +49,10 @@ class SubscriptionMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
         
+        # CRÍTICO: Permitir todas las requests OPTIONS (CORS preflight) sin validación
+        if method == "OPTIONS":
+            return await call_next(request)
+        
         # Permitir endpoints públicos y de auth
         if (path in self.public_endpoints or 
             path in self.auth_endpoints or 

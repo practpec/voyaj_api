@@ -46,6 +46,10 @@ class EmailVerificationMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
         
+        # CRÍTICO: Permitir todas las requests OPTIONS (CORS preflight) sin autenticación
+        if method == "OPTIONS":
+            return await call_next(request)
+        
         # Permitir rutas públicas
         if path in self.public_endpoints:
             return await call_next(request)
