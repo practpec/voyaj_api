@@ -14,7 +14,7 @@ class MongoPhotoRepository:
             "id": str(doc["_id"]),
             "trip_id": str(doc.get("tripId", "")),
             "user_id": str(doc.get("userId", "")),
-            "file_url": doc.get("fileUrl", ""),
+            "file_url": doc.get("fileUrl", ""),  # Mapeo correcto: fileUrl -> file_url
             "taken_at": doc.get("takenAt"),
             "location": doc.get("location"),
             "associated_day_id": str(doc.get("associatedDayId")) if doc.get("associatedDayId") else None,
@@ -22,6 +22,33 @@ class MongoPhotoRepository:
             "is_deleted": doc.get("isDeleted", False)
         }
         return converted
+
+    def _map_update_fields(self, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Map snake_case fields to camelCase for MongoDB"""
+        field_mapping = {
+            "file_url": "fileUrl",
+            "trip_id": "tripId",
+            "user_id": "userId",
+            "taken_at": "takenAt",
+            "associated_day_id": "associatedDayId",
+            "associated_journal_entry_id": "associatedJournalEntryId",
+            "is_deleted": "isDeleted"
+        }
+        
+        mapped_data = {}
+        for key, value in update_data.items():
+            mapped_key = field_mapping.get(key, key)
+            
+            # Convertir ObjectIds si es necesario
+            if key in ["trip_id", "user_id", "associated_day_id", "associated_journal_entry_id"] and value:
+                if isinstance(value, str) and len(value) == 24:  # ObjectId string
+                    mapped_data[mapped_key] = ObjectId(value)
+                else:
+                    mapped_data[mapped_key] = value
+            else:
+                mapped_data[mapped_key] = value
+                
+        return mapped_data
 
     async def create(self, photo: Photo) -> Photo:
         photo_dict = photo.dict(exclude={"id"})
@@ -32,25 +59,20 @@ class MongoPhotoRepository:
         photo_dict["fileUrl"] = photo.file_url
         photo_dict["takenAt"] = photo.taken_at
         
-        if "file_url" in photo_dict:
-            del photo_dict["file_url"]
-        if "trip_id" in photo_dict:
-            del photo_dict["trip_id"]
-        if "user_id" in photo_dict:
-            del photo_dict["user_id"]
-        if "associated_day_id" in photo_dict:
-            del photo_dict["associated_day_id"]
-        if "associated_journal_entry_id" in photo_dict:
-            del photo_dict["associated_journal_entry_id"]
-        if "taken_at" in photo_dict:
-            del photo_dict["taken_at"]
+        # Limpiar campos duplicados
+        fields_to_remove = ["file_url", "trip_id", "user_id", "associated_day_id", "associated_journal_entry_id", "taken_at"]
+        for field in fields_to_remove:
+            photo_dict.pop(field, None)
         
         result = await self.collection.insert_one(photo_dict)
         photo.id = str(result.inserted_id)
         return photo
 
     async def find_by_id(self, photo_id: str) -> Optional[Photo]:
-        doc: Optional[Dict[str, Any]] = await self.collection.find_one({"_id": ObjectId(photo_id), "isDeleted": {"$ne": True}})
+        doc: Optional[Dict[str, Any]] = await self.collection.find_one({
+            "_id": ObjectId(photo_id), 
+            "isDeleted": {"$ne": True}
+        })
         if doc:
             converted = self._convert_doc_to_photo(doc)
             return Photo(**converted)
@@ -93,9 +115,12 @@ class MongoPhotoRepository:
         return photos
 
     async def update(self, photo_id: str, update_data: dict) -> bool:
+        # Mapear campos automáticamente
+        mapped_data = self._map_update_fields(update_data)
+        
         result = await self.collection.update_one(
             {"_id": ObjectId(photo_id)},
-            {"$set": update_data}
+            {"$set": mapped_data}
         )
         return result.modified_count > 0
 

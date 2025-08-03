@@ -57,7 +57,8 @@ class UploadPhotoToCloudinary:
                 await self.photo_repository.delete(photo_id)
                 raise ValueError("Failed to upload photo to Cloudinary")
 
-            await self.photo_repository.update(photo_id, {"file_url": cloudinary_url})
+            # CORRECCIÓN: Usar camelCase para MongoDB
+            await self.photo_repository.update(photo_id, {"fileUrl": cloudinary_url})
             created_photo.file_url = cloudinary_url
 
             return created_photo
@@ -65,33 +66,3 @@ class UploadPhotoToCloudinary:
         except Exception as e:
             await self.photo_repository.delete(photo_id)
             raise ValueError(f"Failed to process photo upload: {str(e)}")
-
-    async def delete_photo_from_cloudinary(self, photo_id: str, user_id: str) -> bool:
-        photo = await self.photo_repository.find_by_id(photo_id)
-        if not photo:
-            raise ValueError("Photo not found")
-
-        trip = await self.trip_repository.find_by_id(photo.trip_id)
-        if not trip:
-            raise ValueError("Trip not found")
-
-        user_role = None
-        for member in trip.members:
-            if member.user_id == user_id:
-                user_role = member.role
-                break
-
-        if user_role not in ["owner", "editor"] and photo.user_id != user_id:
-            raise ValueError("User not authorized to delete this photo")
-
-        deleted_from_cloudinary = await self.file_storage_service.delete_trip_photo(
-            trip_id=photo.trip_id,
-            photo_id=photo_id
-        )
-
-        if deleted_from_cloudinary:
-            await self.photo_repository.delete(photo_id)
-        else:
-            await self.photo_repository.delete(photo_id)
-
-        return True

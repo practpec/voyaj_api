@@ -17,7 +17,18 @@ class ListTripPhotos:
             member.user_id == user_id
             for member in trip.members
         )
-        if not is_member:
-            raise ValueError("User is not a trip member")
+        if not is_member and not trip.is_public:
+            raise ValueError("User not authorized to view trip photos")
 
-        return await self.photo_repository.find_by_trip_id(trip_id)
+        photos = await self.photo_repository.find_by_trip_id(trip_id)
+        
+        # Filtrar fotos sin file_url válido para debugging
+        valid_photos = []
+        for photo in photos:
+            if photo.file_url and photo.file_url.strip():
+                valid_photos.append(photo)
+            else:
+                # Log para debugging
+                print(f"[DEBUG] Photo {photo.id} has empty file_url, skipping")
+        
+        return valid_photos
